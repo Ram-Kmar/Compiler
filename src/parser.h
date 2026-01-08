@@ -24,6 +24,14 @@ struct IdentifierExpr : public Expr {
     void print(int indent = 0) const override;
 };
 
+struct CallExpr : public Expr {
+    std::string callee;
+    std::vector<std::unique_ptr<Expr>> args;
+    CallExpr(std::string c, std::vector<std::unique_ptr<Expr>> a) 
+        : callee(std::move(c)), args(std::move(a)) {}
+    void print(int indent = 0) const override;
+};
+
 struct BinaryExpr : public Expr {
     std::unique_ptr<Expr> lhs;
     std::unique_ptr<Expr> rhs;
@@ -78,8 +86,22 @@ struct WhileStmt : public Stmt {
     void print(int indent = 0) const override;
 };
 
+struct Arg {
+    std::string name;
+};
+
+struct Function : public Node {
+    std::string name;
+    std::vector<Arg> args;
+    std::unique_ptr<ScopeStmt> body;
+    
+    Function(std::string n, std::vector<Arg> a, std::unique_ptr<ScopeStmt> b) 
+        : name(std::move(n)), args(std::move(a)), body(std::move(b)) {}
+    void print(int indent = 0) const override;
+};
+
 struct Program : public Node {
-    std::vector<std::unique_ptr<Stmt>> stmts;
+    std::vector<std::unique_ptr<Function>> functions;
     void print(int indent = 0) const override;
 };
 
@@ -87,17 +109,20 @@ class Parser {
 public:
     explicit Parser(std::vector<Token> tokens);
     std::unique_ptr<Program> parse_program();
-    std::unique_ptr<Stmt> parse_stmt();
-    std::unique_ptr<Expr> parse_expr();
-
+    
 private:
     const std::vector<Token> m_tokens;
     size_t m_index = 0;
     std::optional<Token> peek(int offset = 0) const;
     Token consume();
     
+    std::unique_ptr<Function> parse_function();
+    std::unique_ptr<Stmt> parse_stmt();
+    std::unique_ptr<Stmt> parse_scope(); 
+    
+    std::unique_ptr<Expr> parse_expr();
+    std::unique_ptr<Expr> parse_comparison();
+    std::unique_ptr<Expr> parse_additive();
     std::unique_ptr<Expr> parse_term();
     std::unique_ptr<Expr> parse_factor();
-    std::unique_ptr<Expr> parse_additive();
-    std::unique_ptr<Stmt> parse_scope(); 
 };

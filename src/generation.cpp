@@ -2,8 +2,6 @@
 #include <iostream>
 
 Generator::Generator(std::unique_ptr<Program> root) : m_root(std::move(root)) {
-    // Global scope
-    m_scopes.push_back({}); 
 }
 
 std::string Generator::create_label() {
@@ -15,9 +13,6 @@ void Generator::push_scope() {
 }
 
 void Generator::pop_scope() {
-    // Variables in the current scope are removed from lookup map
-    // Note: We handle the actual stack pointer adjustment inside gen_stmt(ScopeStmt) 
-    // because we need to know the byte count there.
     m_scopes.pop_back();
 }
 
@@ -44,25 +39,47 @@ std::optional<VarInfo> Generator::find_var(const std::string& name) {
 std::string Generator::generate() {
     m_output << ".global _main\n";
     m_output << ".align 2\n\n";
-    m_output << "_main:\n";
 
+    for (const auto& func : m_root->functions) {
+        gen_function(func.get());
+    }
+
+    return m_output.str();
+}
+
+void Generator::gen_function(const Function* func) {
+    m_output << "_" << func->name << ":\n";
+    
     // Prologue
     m_output << "    stp x29, x30, [sp, #-16]!\n";
     m_output << "    mov x29, sp\n";
-
-    for (const auto& stmt : m_root->stmts) {
-        gen_stmt(stmt.get());
+    
+    m_stack_ptr = 0; 
+    push_scope(); 
+    
+    // Handle Arguments (up to 8 in x0-x7)
+    for (size_t i = 0; i < func->args.size(); ++i) {
+        if (i < 8) {
+            m_output << "    str x" << i << ", [sp, #-16]!\n";
+            declare_var(func->args[i].name);
+        } else {
+             std::cerr << "Error: Too many arguments (max 8 supported currently)" << std::endl;
+             exit(1);
+        }
     }
-
+    
+    // Generate body
+    gen_stmt(func->body.get());
+    
     // Default return 0
     m_output << "    mov x0, #0\n";
     
     // Epilogue
-    m_output << "    mov sp, x29\n"; // Restore stack pointer just in case
+    m_output << "    mov sp, x29\n"; 
     m_output << "    ldp x29, x30, [sp], #16\n";
-    m_output << "    ret\n";
-
-    return m_output.str();
+    m_output << "    ret\n\n";
+    
+    pop_scope();
 }
 
 void Generator::gen_stmt(const Stmt* stmt) {
@@ -110,7 +127,7 @@ void Generator::gen_stmt(const Stmt* stmt) {
         
         gen_expr(if_stmt->condition.get());
         m_output << "    cmp x0, #0\n";
-        m_output << "    b.eq " << label_else << "\n"; // Jump to else if false (0)
+        m_output << "    b.eq " << label_else << "\n"; 
         
         gen_stmt(if_stmt->then_stmt.get());
         m_output << "    b " << label_end << "\n";
@@ -147,9 +164,25 @@ void Generator::gen_expr(const Expr* expr) {
             std::cerr << "Error: Undeclared variable: " << ident_expr->name << std::endl;
             exit(1);
         }
-        // Offset is negative relative to x29
         int offset = -(int)var->stack_offset;
         m_output << "    ldr x0, [x29, #" << offset << "]\n";
+    } else if (const auto* call_expr = dynamic_cast<const CallExpr*>(expr)) {
+        // Evaluate args and push to stack
+        for (const auto& arg : call_expr->args) {
+            gen_expr(arg.get());
+            m_output << "    str x0, [sp, #-16]!\n";
+        }
+        // Pop into registers (last arg is at top of stack, so pop to last reg)
+        // Wait: "str x0, [sp, -16]!" pre-decrements.
+        // Stack: [Arg1] [Arg2] ... [ArgN] <- SP
+        // If we pop, we get ArgN first.
+        // ArgN should go to x(N-1).
+        
+        for (int i = (int)call_expr->args.size() - 1; i >= 0; --i) {
+             m_output << "    ldr x" << i << ", [sp], #16\n";
+        }
+        
+        m_output << "    bl _" << call_expr->callee << "\n";
     } else if (const auto* bin_expr = dynamic_cast<const BinaryExpr*>(expr)) {
         gen_expr(bin_expr->rhs.get());
         m_output << "    str x0, [sp, #-16]!\n";
@@ -165,6 +198,18 @@ void Generator::gen_expr(const Expr* expr) {
             m_output << "    mul x0, x0, x1\n";
         } else if (bin_expr->op == TokenType::slash) {
             m_output << "    sdiv x0, x0, x1\n";
+        } else if (bin_expr->op == TokenType::eq_eq) {
+            m_output << "    cmp x0, x1\n";
+            m_output << "    cset x0, eq\n";
+        } else if (bin_expr->op == TokenType::neq) {
+            m_output << "    cmp x0, x1\n";
+            m_output << "    cset x0, ne\n";
+        } else if (bin_expr->op == TokenType::lt) {
+            m_output << "    cmp x0, x1\n";
+            m_output << "    cset x0, lt\n";
+        } else if (bin_expr->op == TokenType::gt) {
+            m_output << "    cmp x0, x1\n";
+            m_output << "    cset x0, gt\n";
         }
     }
 }

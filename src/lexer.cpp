@@ -12,6 +12,10 @@ std::string token_to_string(const Token& token) {
         case TokenType::_while:  return "WHILE";
         case TokenType::semi:    return "SEMI";
         case TokenType::eq:      return "EQUALS";
+        case TokenType::eq_eq:   return "EQ_EQ";
+        case TokenType::neq:  return "NEQ";
+        case TokenType::lt:      return "LT";
+        case TokenType::gt:      return "GT";
         case TokenType::plus:    return "PLUS";
         case TokenType::minus:   return "MINUS";
         case TokenType::star:    return "STAR";
@@ -20,6 +24,7 @@ std::string token_to_string(const Token& token) {
         case TokenType::close_curly: return "CLOSE_CURLY";
         case TokenType::open_paren:  return "OPEN_PAREN";
         case TokenType::close_paren: return "CLOSE_PAREN";
+        case TokenType::comma:       return "COMMA";
         case TokenType::int_lit: 
             return "INT_LIT(" + std::to_string(std::get<int>(token.value)) + ")";
         case TokenType::ident:   
@@ -65,7 +70,27 @@ std::vector<Token> tokenize(const std::string& src) {
             tokens.push_back({TokenType::semi});
         }
         else if (c == '=') {
-            tokens.push_back({TokenType::eq});
+            if (i + 1 < src.length() && src[i + 1] == '=') {
+                tokens.push_back({TokenType::eq_eq});
+                i++; // Skip next char
+            } else {
+                tokens.push_back({TokenType::eq});
+            }
+        }
+        else if (c == '!') {
+            if (i + 1 < src.length() && src[i + 1] == '=') {
+                tokens.push_back({TokenType::neq});
+                i++; // Skip next char
+            } else {
+                std::cerr << "Error: Expected '=' after '!'" << std::endl;
+                exit(1);
+            }
+        }
+        else if (c == '<') {
+            tokens.push_back({TokenType::lt});
+        }
+        else if (c == '>') {
+            tokens.push_back({TokenType::gt});
         }
         else if (c == '+') {
             tokens.push_back({TokenType::plus});
@@ -90,6 +115,9 @@ std::vector<Token> tokenize(const std::string& src) {
         }
         else if (c == ')') {
             tokens.push_back({TokenType::close_paren});
+        }
+        else if (c == ',') {
+            tokens.push_back({TokenType::comma});
         }
         else if (std::isspace(c)) {
             continue;

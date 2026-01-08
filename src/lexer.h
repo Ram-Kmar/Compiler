@@ -18,10 +18,15 @@ enum class TokenType {
     minus,
     star,
     slash,
+    eq_eq,
+    neq,
+    lt,
+    gt,
     open_curly,
     close_curly,
     open_paren,
-    close_paren
+    close_paren,
+    comma
 };
 
 struct Token {

@@ -1,7 +1,5 @@
-int x = 0;
-int i = 5;
-while (i) {
-    x = x + i;
-    i = i - 1;
+int x = 10;
+while (x > 5) {
+    x = x - 1;
 }
 return x;

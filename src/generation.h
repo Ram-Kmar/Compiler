@@ -23,6 +23,7 @@ private:
     // Stack of scopes. Each scope is a map of variable names to their info.
     std::vector<std::unordered_map<std::string, VarInfo>> m_scopes;
     
+    void gen_function(const Function* func);
     void gen_stmt(const Stmt* stmt);
     void gen_expr(const Expr* expr);
     
