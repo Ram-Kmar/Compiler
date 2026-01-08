@@ -1,0 +1,19 @@
+# Build artifacts
+build/
+bin/
+obj/
+
+# Generated files
+out.s
+out
+compiler
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+build.ninja
+
+# OS specific
+.DS_Store
