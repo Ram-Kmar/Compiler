@@ -7,8 +7,18 @@ std::string token_to_string(const Token& token) {
     switch (token.type) {
         case TokenType::_return: return "RETURN";
         case TokenType::_int:    return "INT";
+        case TokenType::_if:     return "IF";
+        case TokenType::_else:   return "ELSE";
         case TokenType::semi:    return "SEMI";
         case TokenType::eq:      return "EQUALS";
+        case TokenType::plus:    return "PLUS";
+        case TokenType::minus:   return "MINUS";
+        case TokenType::star:    return "STAR";
+        case TokenType::slash:   return "SLASH";
+        case TokenType::open_curly:  return "OPEN_CURLY";
+        case TokenType::close_curly: return "CLOSE_CURLY";
+        case TokenType::open_paren:  return "OPEN_PAREN";
+        case TokenType::close_paren: return "CLOSE_PAREN";
         case TokenType::int_lit: 
             return "INT_LIT(" + std::to_string(std::get<int>(token.value)) + ")";
         case TokenType::ident:   
@@ -31,6 +41,10 @@ std::vector<Token> tokenize(const std::string& src) {
                     tokens.push_back({TokenType::_return});
                 } else if (buf == "int") {
                     tokens.push_back({TokenType::_int});
+                } else if (buf == "if") {
+                    tokens.push_back({TokenType::_if});
+                } else if (buf == "else") {
+                    tokens.push_back({TokenType::_else});
                 } else {
                     tokens.push_back({TokenType::ident, buf});
                 }
@@ -49,6 +63,30 @@ std::vector<Token> tokenize(const std::string& src) {
         }
         else if (c == '=') {
             tokens.push_back({TokenType::eq});
+        }
+        else if (c == '+') {
+            tokens.push_back({TokenType::plus});
+        }
+        else if (c == '-') {
+            tokens.push_back({TokenType::minus});
+        }
+        else if (c == '*') {
+            tokens.push_back({TokenType::star});
+        }
+        else if (c == '/') {
+            tokens.push_back({TokenType::slash});
+        }
+        else if (c == '{') {
+            tokens.push_back({TokenType::open_curly});
+        }
+        else if (c == '}') {
+            tokens.push_back({TokenType::close_curly});
+        }
+        else if (c == '(') {
+            tokens.push_back({TokenType::open_paren});
+        }
+        else if (c == ')') {
+            tokens.push_back({TokenType::close_paren});
         }
         else if (std::isspace(c)) {
             continue;

@@ -24,6 +24,15 @@ struct IdentifierExpr : public Expr {
     void print(int indent = 0) const override;
 };
 
+struct BinaryExpr : public Expr {
+    std::unique_ptr<Expr> lhs;
+    std::unique_ptr<Expr> rhs;
+    TokenType op; 
+    BinaryExpr(std::unique_ptr<Expr> l, std::unique_ptr<Expr> r, TokenType o) 
+        : lhs(std::move(l)), rhs(std::move(r)), op(o) {}
+    void print(int indent = 0) const override;
+};
+
 struct Stmt : public Node {};
 
 struct ReturnStmt : public Stmt {
@@ -36,6 +45,28 @@ struct VarDecl : public Stmt {
     std::string name;
     std::unique_ptr<Expr> init;
     VarDecl(std::string n, std::unique_ptr<Expr> i) : name(std::move(n)), init(std::move(i)) {}
+    void print(int indent = 0) const override;
+};
+
+struct AssignStmt : public Stmt {
+    std::string name;
+    std::unique_ptr<Expr> value;
+    AssignStmt(std::string n, std::unique_ptr<Expr> v) : name(std::move(n)), value(std::move(v)) {}
+    void print(int indent = 0) const override;
+};
+
+struct ScopeStmt : public Stmt {
+    std::vector<std::unique_ptr<Stmt>> stmts;
+    ScopeStmt(std::vector<std::unique_ptr<Stmt>> s) : stmts(std::move(s)) {}
+    void print(int indent = 0) const override;
+};
+
+struct IfStmt : public Stmt {
+    std::unique_ptr<Expr> condition;
+    std::unique_ptr<Stmt> then_stmt;
+    std::unique_ptr<Stmt> else_stmt; 
+    IfStmt(std::unique_ptr<Expr> c, std::unique_ptr<Stmt> t, std::unique_ptr<Stmt> e = nullptr) 
+        : condition(std::move(c)), then_stmt(std::move(t)), else_stmt(std::move(e)) {}
     void print(int indent = 0) const override;
 };
 
@@ -56,4 +87,9 @@ private:
     size_t m_index = 0;
     std::optional<Token> peek(int offset = 0) const;
     Token consume();
+    
+    std::unique_ptr<Expr> parse_term();
+    std::unique_ptr<Expr> parse_factor();
+    std::unique_ptr<Expr> parse_additive();
+    std::unique_ptr<Stmt> parse_scope(); 
 };

@@ -3,6 +3,7 @@
 #include <string>
 #include <sstream>
 #include <unordered_map>
+#include <vector>
 
 struct VarInfo {
     size_t stack_offset;
@@ -16,9 +17,19 @@ public:
 private:
     std::unique_ptr<Program> m_root;
     std::stringstream m_output;
-    std::unordered_map<std::string, VarInfo> m_vars;
     size_t m_stack_ptr = 0;
+    int m_label_count = 0;
+    
+    // Stack of scopes. Each scope is a map of variable names to their info.
+    std::vector<std::unordered_map<std::string, VarInfo>> m_scopes;
     
     void gen_stmt(const Stmt* stmt);
     void gen_expr(const Expr* expr);
+    
+    // Helpers
+    std::string create_label();
+    void push_scope();
+    void pop_scope();
+    void declare_var(const std::string& name);
+    std::optional<VarInfo> find_var(const std::string& name);
 };

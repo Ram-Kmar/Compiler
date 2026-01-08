@@ -1,3 +1,3 @@
 int x = 10;
-int y = 20;
+x = x + 5;
 return x;

@@ -7,10 +7,20 @@
 enum class TokenType {
     _return,
     _int,
+    _if,
+    _else,
     int_lit,
     semi,
     ident,
-    eq
+    eq,
+    plus,
+    minus,
+    star,
+    slash,
+    open_curly,
+    close_curly,
+    open_paren,
+    close_paren
 };
 
 struct Token {
