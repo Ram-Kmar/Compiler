@@ -9,6 +9,7 @@ std::string token_to_string(const Token& token) {
         case TokenType::_int:    return "INT";
         case TokenType::_if:     return "IF";
         case TokenType::_else:   return "ELSE";
+        case TokenType::_while:  return "WHILE";
         case TokenType::semi:    return "SEMI";
         case TokenType::eq:      return "EQUALS";
         case TokenType::plus:    return "PLUS";
@@ -45,6 +46,8 @@ std::vector<Token> tokenize(const std::string& src) {
                     tokens.push_back({TokenType::_if});
                 } else if (buf == "else") {
                     tokens.push_back({TokenType::_else});
+                } else if (buf == "while") {
+                    tokens.push_back({TokenType::_while});
                 } else {
                     tokens.push_back({TokenType::ident, buf});
                 }

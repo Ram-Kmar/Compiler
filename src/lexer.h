@@ -9,6 +9,7 @@ enum class TokenType {
     _int,
     _if,
     _else,
+    _while,
     int_lit,
     semi,
     ident,

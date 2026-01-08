@@ -122,6 +122,20 @@ void Generator::gen_stmt(const Stmt* stmt) {
         
         m_output << label_end << ":\n";
     }
+    else if (const auto* while_stmt = dynamic_cast<const WhileStmt*>(stmt)) {
+        std::string label_start = create_label();
+        std::string label_end = create_label();
+        
+        m_output << label_start << ":\n";
+        gen_expr(while_stmt->condition.get());
+        m_output << "    cmp x0, #0\n";
+        m_output << "    b.eq " << label_end << "\n";
+        
+        gen_stmt(while_stmt->body.get());
+        m_output << "    b " << label_start << "\n";
+        
+        m_output << label_end << ":\n";
+    }
 }
 
 void Generator::gen_expr(const Expr* expr) {

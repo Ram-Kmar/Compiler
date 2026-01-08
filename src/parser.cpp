@@ -76,6 +76,17 @@ void IfStmt::print(int indent) const {
     }
 }
 
+void WhileStmt::print(int indent) const {
+    print_indent(indent);
+    std::cout << "WhileStmt:" << std::endl;
+    print_indent(indent + 1);
+    std::cout << "Condition:" << std::endl;
+    condition->print(indent + 2);
+    print_indent(indent + 1);
+    std::cout << "Body:" << std::endl;
+    body->print(indent + 2);
+}
+
 void Program::print(int indent) const {
     print_indent(indent);
     std::cout << "Program:" << std::endl;
@@ -237,8 +248,6 @@ std::unique_ptr<Stmt> Parser::parse_stmt() {
             }
             return std::make_unique<AssignStmt>(name, std::move(expr));
         } else {
-            // For now, if it's just an ident followed by semi, it's an expression statement.
-            // But we don't have general expression statements yet.
             std::cerr << "Error: Unexpected identifier or missing assignment." << std::endl;
             exit(1);
         }
@@ -276,6 +285,32 @@ std::unique_ptr<Stmt> Parser::parse_stmt() {
             }
         } else {
             std::cerr << "Error: Expected '(' after if" << std::endl;
+            exit(1);
+        }
+    }
+    else if (peek().value().type == TokenType::_while) {
+        consume(); // Eat 'while'
+        if (peek().has_value() && peek().value().type == TokenType::open_paren) {
+            consume(); // Eat '('
+            auto condition = parse_expr();
+            if (!condition) {
+                std::cerr << "Error: Expected expression in while condition" << std::endl;
+                exit(1);
+            }
+            if (peek().has_value() && peek().value().type == TokenType::close_paren) {
+                consume(); // Eat ')'
+                auto body = parse_stmt();
+                if (!body) {
+                    std::cerr << "Error: Expected statement after while condition" << std::endl;
+                    exit(1);
+                }
+                return std::make_unique<WhileStmt>(std::move(condition), std::move(body));
+            } else {
+                std::cerr << "Error: Expected ')' after while condition" << std::endl;
+                exit(1);
+            }
+        } else {
+            std::cerr << "Error: Expected '(' after while" << std::endl;
             exit(1);
         }
     }

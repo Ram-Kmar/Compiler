@@ -70,6 +70,14 @@ struct IfStmt : public Stmt {
     void print(int indent = 0) const override;
 };
 
+struct WhileStmt : public Stmt {
+    std::unique_ptr<Expr> condition;
+    std::unique_ptr<Stmt> body;
+    WhileStmt(std::unique_ptr<Expr> c, std::unique_ptr<Stmt> b) 
+        : condition(std::move(c)), body(std::move(b)) {}
+    void print(int indent = 0) const override;
+};
+
 struct Program : public Node {
     std::vector<std::unique_ptr<Stmt>> stmts;
     void print(int indent = 0) const override;
