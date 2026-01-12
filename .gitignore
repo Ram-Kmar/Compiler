@@ -8,6 +8,10 @@ out.s
 out
 compiler
 
+# Ninja (generated, local-only)
+.ninja_log
+.ninja_deps
+
 # CMake
 CMakeCache.txt
 CMakeFiles/

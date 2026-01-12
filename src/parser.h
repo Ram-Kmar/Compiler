@@ -112,6 +112,7 @@ struct Function : public Node {
 
 struct Program : public Node {
   std::vector<std::unique_ptr<Function>> functions;
+  std::vector<std::unique_ptr<Stmt>> globals;
   void print(int indent = 0) const override;
 };
 

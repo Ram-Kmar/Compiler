@@ -133,6 +133,9 @@ void Function::print(int indent) const {
 void Program::print(int indent) const {
   print_indent(indent);
   std::cout << "Program:" << std::endl;
+  for (const auto &stmt : globals) {
+    stmt->print(indent + 1);
+  }
   for (const auto &func : functions) {
     func->print(indent + 1);
   }
@@ -452,6 +455,8 @@ std::unique_ptr<Function> Parser::parse_function() {
 
   // Expect '('
   if (!peek().has_value() || peek().value().type != TokenType::open_paren) {
+    std::cout << "Peek().has_value():"<< peek().has_value() << '\n';
+    std::cout << "peek().value():"<< token_to_string(peek().value()) << '\n';
     std::cerr << "Error: Expected '('" << std::endl;
     exit(1);
   }
@@ -515,7 +520,18 @@ std::unique_ptr<Function> Parser::parse_function() {
 std::unique_ptr<Program> Parser::parse_program() {
   auto program = std::make_unique<Program>();
   while (peek().has_value()) {
-    program->functions.push_back(parse_function());
+    bool is_func = false;
+    if (peek(0).has_value() && peek(0).value().type == TokenType::_int &&
+        peek(1).has_value() && peek(1).value().type == TokenType::ident &&
+        peek(2).has_value() && peek(2).value().type == TokenType::open_paren) {
+      is_func = true;
+    }
+
+    if (is_func) {
+      program->functions.push_back(parse_function());
+    } else {
+      program->globals.push_back(parse_stmt());
+    }
   }
   return program;
 }

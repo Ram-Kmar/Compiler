@@ -44,8 +44,32 @@ std::string Generator::generate() {
     m_output << "fmt: .asciz \"%d\\n\"\n";
     m_output << ".text\n\n";
 
+    bool has_main = false;
     for (const auto& func : m_root->functions) {
+        if (func->name == "main") {
+            has_main = true;
+        }
         gen_function(func.get());
+    }
+
+    if (!has_main && !m_root->globals.empty()) {
+        m_output << "_main:\n";
+        m_output << "    stp x29, x30, [sp, #-16]!\n";
+        m_output << "    mov x29, sp\n";
+        
+        m_stack_ptr = 0;
+        push_scope();
+
+        for (const auto& stmt : m_root->globals) {
+            gen_stmt(stmt.get());
+        }
+
+        m_output << "    mov x0, #0\n";
+        m_output << "    mov sp, x29\n";
+        m_output << "    ldp x29, x30, [sp], #16\n";
+        m_output << "    ret\n\n";
+
+        pop_scope();
     }
 
     return m_output.str();
