@@ -9,6 +9,10 @@ struct VarInfo {
     size_t stack_offset;
 };
 
+struct VarInfo {
+    size_t stack_offset;
+};
+
 class Generator {
 public:
     explicit Generator(std::unique_ptr<Program> root);

@@ -40,6 +40,10 @@ std::string Generator::generate() {
     m_output << ".global _main\n";
     m_output << ".align 2\n\n";
 
+    m_output << ".data\n";
+    m_output << "fmt: .asciz \"%d\\n\"\n";
+    m_output << ".text\n\n";
+
     for (const auto& func : m_root->functions) {
         gen_function(func.get());
     }
@@ -89,6 +93,9 @@ void Generator::gen_stmt(const Stmt* stmt) {
         m_output << "    ldp x29, x30, [sp], #16\n";
         m_output << "    ret\n";
     } 
+    else if (const auto* expr_stmt = dynamic_cast<const ExprStmt*>(stmt)) {
+        gen_expr(expr_stmt->expr.get());
+    }
     else if (const auto* var_decl = dynamic_cast<const VarDecl*>(stmt)) {
         gen_expr(var_decl->init.get());
         m_output << "    str x0, [sp, #-16]!\n"; // Push to stack
@@ -167,22 +174,30 @@ void Generator::gen_expr(const Expr* expr) {
         int offset = -(int)var->stack_offset;
         m_output << "    ldr x0, [x29, #" << offset << "]\n";
     } else if (const auto* call_expr = dynamic_cast<const CallExpr*>(expr)) {
-        // Evaluate args and push to stack
-        for (const auto& arg : call_expr->args) {
-            gen_expr(arg.get());
-            m_output << "    str x0, [sp, #-16]!\n";
+        if (call_expr->callee == "print") {
+            if (call_expr->args.size() != 1) {
+                std::cerr << "Error: print() takes exactly 1 argument" << std::endl;
+                exit(1);
+            }
+            gen_expr(call_expr->args[0].get()); // Result in x0
+            // Prepare for printf(fmt, val) -> x0=fmt, x1=val
+            m_output << "    mov x1, x0\n";
+            m_output << "    adrp x0, fmt@PAGE\n";
+            m_output << "    add x0, x0, fmt@PAGEOFF\n";
+            m_output << "    bl _printf\n";
+        } else {
+            // Evaluate args and push to stack
+            for (const auto& arg : call_expr->args) {
+                gen_expr(arg.get());
+                m_output << "    str x0, [sp, #-16]!\n";
+            }
+            
+            for (int i = (int)call_expr->args.size() - 1; i >= 0; --i) {
+                m_output << "    ldr x" << i << ", [sp], #16\n";
+            }
+            
+            m_output << "    bl _" << call_expr->callee << "\n";
         }
-        // Pop into registers (last arg is at top of stack, so pop to last reg)
-        // Wait: "str x0, [sp, -16]!" pre-decrements.
-        // Stack: [Arg1] [Arg2] ... [ArgN] <- SP
-        // If we pop, we get ArgN first.
-        // ArgN should go to x(N-1).
-        
-        for (int i = (int)call_expr->args.size() - 1; i >= 0; --i) {
-             m_output << "    ldr x" << i << ", [sp], #16\n";
-        }
-        
-        m_output << "    bl _" << call_expr->callee << "\n";
     } else if (const auto* bin_expr = dynamic_cast<const BinaryExpr*>(expr)) {
         gen_expr(bin_expr->rhs.get());
         m_output << "    str x0, [sp, #-16]!\n";
