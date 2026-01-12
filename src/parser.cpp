@@ -9,6 +9,11 @@ void IntLitExpr::print(int indent) const {
   std::cout << "IntLit(" << value << ")" << std::endl;
 }
 
+void BoolLitExpr::print(int indent) const {
+  print_indent(indent);
+  std::cout << "BoolLit(" << (value ? "true" : "false") << ")" << std::endl;
+}
+
 void IdentifierExpr::print(int indent) const {
   print_indent(indent);
   std::cout << "Ident(" << name << ")" << std::endl;
@@ -20,6 +25,21 @@ void CallExpr::print(int indent) const {
   for (const auto &arg : args) {
     arg->print(indent + 1);
   }
+}
+
+void UnaryExpr::print(int indent) const {
+  print_indent(indent);
+  std::string op_char;
+  switch (op) {
+  case TokenType::bang:
+    op_char = "!";
+    break;
+  default:
+    op_char = "?";
+    break;
+  }
+  std::cout << "UnaryExpr(" << op_char << "):" << std::endl;
+  operand->print(indent + 1);
 }
 
 void BinaryExpr::print(int indent) const {
@@ -50,6 +70,12 @@ void BinaryExpr::print(int indent) const {
   case TokenType::gt:
     op_char = ">";
     break;
+  case TokenType::amp_amp:
+    op_char = "&&";
+    break;
+  case TokenType::pipe_pipe:
+    op_char = "||";
+    break;
   default:
     op_char = "?";
     break;
@@ -75,7 +101,10 @@ void ExprStmt::print(int indent) const {
 
 void VarDecl::print(int indent) const {
   print_indent(indent);
-  std::cout << "VarDecl(" << name << "):" << std::endl;
+  std::string type_str = "void";
+  if (type == Type::Int) type_str = "int";
+  else if (type == Type::Bool) type_str = "bool";
+  std::cout << "VarDecl(" << name << ", " << type_str << "):" << std::endl;
   init->print(indent + 1);
 }
 
@@ -122,10 +151,17 @@ void WhileStmt::print(int indent) const {
 
 void Function::print(int indent) const {
   print_indent(indent);
-  std::cout << "Function(" << name << "):" << std::endl;
+  std::string ret_type_str = "void";
+  if (return_type == Type::Int) ret_type_str = "int";
+  else if (return_type == Type::Bool) ret_type_str = "bool";
+
+  std::cout << "Function(" << name << ", " << ret_type_str << "):" << std::endl;
   for (const auto &arg : args) {
     print_indent(indent + 1);
-    std::cout << "Arg(" << arg.name << ")" << std::endl;
+    std::string arg_type_str = "void";
+    if (arg.type == Type::Int) arg_type_str = "int";
+    else if (arg.type == Type::Bool) arg_type_str = "bool";
+    std::cout << "Arg(" << arg.name << ", " << arg_type_str << ")" << std::endl;
   }
   body->print(indent + 1);
 }
@@ -145,7 +181,45 @@ Parser::Parser(std::vector<Token> tokens) : m_tokens(std::move(tokens)) {}
 
 std::unique_ptr<Expr>
 Parser::parse_expr() {
-  return parse_comparison();
+  return parse_logical_or();
+}
+
+std::unique_ptr<Expr> Parser::parse_logical_or() {
+  auto lhs = parse_logical_and();
+  while (peek().has_value()) {
+    if (peek().value().type == TokenType::pipe_pipe) {
+      Token op = consume();
+      auto rhs = parse_logical_and();
+      if (!rhs) {
+        std::cerr << "Error: Expected expression after '||'" << std::endl;
+        exit(1);
+      }
+      lhs =
+          std::make_unique<BinaryExpr>(std::move(lhs), std::move(rhs), op.type);
+    } else {
+      break;
+    }
+  }
+  return lhs;
+}
+
+std::unique_ptr<Expr> Parser::parse_logical_and() {
+  auto lhs = parse_comparison();
+  while (peek().has_value()) {
+    if (peek().value().type == TokenType::amp_amp) {
+      Token op = consume();
+      auto rhs = parse_comparison();
+      if (!rhs) {
+        std::cerr << "Error: Expected expression after '&&'" << std::endl;
+        exit(1);
+      }
+      lhs =
+          std::make_unique<BinaryExpr>(std::move(lhs), std::move(rhs), op.type);
+    } else {
+      break;
+    }
+  }
+  return lhs;
 }
 
 std::unique_ptr<Expr> Parser::parse_comparison() {
@@ -191,12 +265,12 @@ std::unique_ptr<Expr> Parser::parse_additive() {
 }
 
 std::unique_ptr<Expr> Parser::parse_term() {
-  auto lhs = parse_factor();
+  auto lhs = parse_unary();
   while (peek().has_value()) {
     if (peek().value().type == TokenType::star ||
         peek().value().type == TokenType::slash) {
       Token op = consume();
-      auto rhs = parse_factor();
+      auto rhs = parse_unary();
       if (!rhs) {
         std::cerr << "Error: Expected expression after operator" << std::endl;
         exit(1);
@@ -210,11 +284,30 @@ std::unique_ptr<Expr> Parser::parse_term() {
   return lhs;
 }
 
+std::unique_ptr<Expr> Parser::parse_unary() {
+  if (peek().has_value() && peek().value().type == TokenType::bang) {
+    Token op = consume();
+    auto operand = parse_unary();
+    if (!operand) {
+        std::cerr << "Error: Expected expression after '!'" << std::endl;
+        exit(1);
+    }
+    return std::make_unique<UnaryExpr>(std::move(operand), op.type);
+  }
+  return parse_factor();
+}
+
 std::unique_ptr<Expr> Parser::parse_factor() {
   if (peek().has_value()) {
     if (peek().value().type == TokenType::int_lit) {
       auto token = consume();
       return std::make_unique<IntLitExpr>(std::get<int>(token.value));
+    } else if (peek().value().type == TokenType::_true) {
+      consume();
+      return std::make_unique<BoolLitExpr>(true);
+    } else if (peek().value().type == TokenType::_false) {
+      consume();
+      return std::make_unique<BoolLitExpr>(false);
     } else if (peek().value().type == TokenType::ident) {
       // Check for CallExpr
       if (peek(1).has_value() &&
@@ -304,8 +397,10 @@ std::unique_ptr<Stmt> Parser::parse_stmt() {
       exit(1);
     }
     return std::make_unique<ReturnStmt>(std::move(expr));
-  } else if (peek().value().type == TokenType::_int) {
-    consume();
+  } else if (peek().value().type == TokenType::_int || peek().value().type == TokenType::_bool) {
+    auto type_token = consume();
+    Type type = (type_token.type == TokenType::_int) ? Type::Int : Type::Bool;
+    
     if (peek().has_value() && peek().value().type == TokenType::ident) {
       auto name_token = consume();
       std::string name = std::get<std::string>(name_token.value);
@@ -323,13 +418,13 @@ std::unique_ptr<Stmt> Parser::parse_stmt() {
                     << std::endl;
           exit(1);
         }
-        return std::make_unique<VarDecl>(name, std::move(init));
+        return std::make_unique<VarDecl>(name, type, std::move(init));
       } else {
         std::cerr << "Error: Expected '=' in variable declaration" << std::endl;
         exit(1);
       }
     } else {
-      std::cerr << "Error: Expected identifier after 'int'" << std::endl;
+      std::cerr << "Error: Expected identifier after type" << std::endl;
       exit(1);
     }
   } else if (peek().value().type == TokenType::ident) {
@@ -439,12 +534,18 @@ std::unique_ptr<Stmt> Parser::parse_stmt() {
 }
 
 std::unique_ptr<Function> Parser::parse_function() {
-  // Expect 'int'
-  if (!peek().has_value() || peek().value().type != TokenType::_int) {
-    std::cerr << "Error: Expected 'int' return type" << std::endl;
+  // Expect type
+  Type return_type;
+  if (peek().has_value() && peek().value().type == TokenType::_int) {
+    consume();
+    return_type = Type::Int;
+  } else if (peek().has_value() && peek().value().type == TokenType::_bool) {
+    consume();
+    return_type = Type::Bool;
+  } else {
+    std::cerr << "Error: Expected return type" << std::endl;
     exit(1);
   }
-  consume();
 
   // Expect Identifier (Function Name)
   if (!peek().has_value() || peek().value().type != TokenType::ident) {
@@ -466,16 +567,23 @@ std::unique_ptr<Function> Parser::parse_function() {
   // Parse args
   if (peek().has_value() && peek().value().type != TokenType::close_paren) {
     while (true) {
-      if (!peek().has_value() || peek().value().type != TokenType::_int) {
-        std::cerr << "Error: Expected 'int' for arg type" << std::endl;
+      Type arg_type;
+      if (peek().has_value() && peek().value().type == TokenType::_int) {
+        consume();
+        arg_type = Type::Int;
+      } else if (peek().has_value() && peek().value().type == TokenType::_bool) {
+        consume();
+        arg_type = Type::Bool;
+      } else {
+        std::cerr << "Error: Expected arg type" << std::endl;
         exit(1);
       }
-      consume();
+
       if (!peek().has_value() || peek().value().type != TokenType::ident) {
         std::cerr << "Error: Expected arg name" << std::endl;
         exit(1);
       }
-      args.push_back({std::get<std::string>(consume().value)});
+      args.push_back({std::get<std::string>(consume().value), arg_type});
 
       if (peek().has_value() && peek().value().type == TokenType::comma) {
         consume();
@@ -514,14 +622,16 @@ std::unique_ptr<Function> Parser::parse_function() {
   body_stmt.release(); // release ownership from old ptr
   std::unique_ptr<ScopeStmt> scope_ptr(raw_scope);
 
-  return std::make_unique<Function>(name, args, std::move(scope_ptr));
+  return std::make_unique<Function>(name, args, std::move(scope_ptr), return_type);
 }
 
 std::unique_ptr<Program> Parser::parse_program() {
   auto program = std::make_unique<Program>();
   while (peek().has_value()) {
     bool is_func = false;
-    if (peek(0).has_value() && peek(0).value().type == TokenType::_int &&
+    bool is_type = peek(0).has_value() && (peek(0).value().type == TokenType::_int || peek(0).value().type == TokenType::_bool);
+    
+    if (is_type &&
         peek(1).has_value() && peek(1).value().type == TokenType::ident &&
         peek(2).has_value() && peek(2).value().type == TokenType::open_paren) {
       is_func = true;

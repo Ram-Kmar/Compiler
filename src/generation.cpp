@@ -189,6 +189,8 @@ void Generator::gen_stmt(const Stmt* stmt) {
 void Generator::gen_expr(const Expr* expr) {
     if (const auto* int_lit = dynamic_cast<const IntLitExpr*>(expr)) {
         m_output << "    mov x0, #" << int_lit->value << "\n";
+    } else if (const auto* bool_lit = dynamic_cast<const BoolLitExpr*>(expr)) {
+        m_output << "    mov x0, #" << (bool_lit->value ? 1 : 0) << "\n";
     } else if (const auto* ident_expr = dynamic_cast<const IdentifierExpr*>(expr)) {
         auto var = find_var(ident_expr->name);
         if (!var.has_value()) {
@@ -222,33 +224,77 @@ void Generator::gen_expr(const Expr* expr) {
             
             m_output << "    bl _" << call_expr->callee << "\n";
         }
-    } else if (const auto* bin_expr = dynamic_cast<const BinaryExpr*>(expr)) {
-        gen_expr(bin_expr->rhs.get());
-        m_output << "    str x0, [sp, #-16]!\n";
-        
-        gen_expr(bin_expr->lhs.get());
-        m_output << "    ldr x1, [sp], #16\n";
-        
-        if (bin_expr->op == TokenType::plus) {
-            m_output << "    add x0, x0, x1\n";
-        } else if (bin_expr->op == TokenType::minus) {
-            m_output << "    sub x0, x0, x1\n";
-        } else if (bin_expr->op == TokenType::star) {
-            m_output << "    mul x0, x0, x1\n";
-        } else if (bin_expr->op == TokenType::slash) {
-            m_output << "    sdiv x0, x0, x1\n";
-        } else if (bin_expr->op == TokenType::eq_eq) {
-            m_output << "    cmp x0, x1\n";
+    } else if (const auto* unary_expr = dynamic_cast<const UnaryExpr*>(expr)) {
+        gen_expr(unary_expr->operand.get());
+        if (unary_expr->op == TokenType::bang) {
+            m_output << "    cmp x0, #0\n";
             m_output << "    cset x0, eq\n";
-        } else if (bin_expr->op == TokenType::neq) {
-            m_output << "    cmp x0, x1\n";
-            m_output << "    cset x0, ne\n";
-        } else if (bin_expr->op == TokenType::lt) {
-            m_output << "    cmp x0, x1\n";
-            m_output << "    cset x0, lt\n";
-        } else if (bin_expr->op == TokenType::gt) {
-            m_output << "    cmp x0, x1\n";
-            m_output << "    cset x0, gt\n";
+        }
+    } else if (const auto* bin_expr = dynamic_cast<const BinaryExpr*>(expr)) {
+        if (bin_expr->op == TokenType::amp_amp) {
+            std::string label_false = create_label();
+            std::string label_end = create_label();
+            
+            gen_expr(bin_expr->lhs.get());
+            m_output << "    cmp x0, #0\n";
+            m_output << "    b.eq " << label_false << "\n";
+            
+            gen_expr(bin_expr->rhs.get());
+            m_output << "    cmp x0, #0\n";
+            m_output << "    b.eq " << label_false << "\n";
+            
+            m_output << "    mov x0, #1\n";
+            m_output << "    b " << label_end << "\n";
+            
+            m_output << label_false << ":\n";
+            m_output << "    mov x0, #0\n";
+            m_output << label_end << ":\n";
+        } else if (bin_expr->op == TokenType::pipe_pipe) {
+            std::string label_true = create_label();
+            std::string label_end = create_label();
+            
+            gen_expr(bin_expr->lhs.get());
+            m_output << "    cmp x0, #0\n";
+            m_output << "    b.ne " << label_true << "\n";
+            
+            gen_expr(bin_expr->rhs.get());
+            m_output << "    cmp x0, #0\n";
+            m_output << "    b.ne " << label_true << "\n";
+            
+            m_output << "    mov x0, #0\n";
+            m_output << "    b " << label_end << "\n";
+            
+            m_output << label_true << ":\n";
+            m_output << "    mov x0, #1\n";
+            m_output << label_end << ":\n";
+        } else {
+            gen_expr(bin_expr->rhs.get());
+            m_output << "    str x0, [sp, #-16]!\n";
+            
+            gen_expr(bin_expr->lhs.get());
+            m_output << "    ldr x1, [sp], #16\n";
+            
+            if (bin_expr->op == TokenType::plus) {
+                m_output << "    add x0, x0, x1\n";
+            } else if (bin_expr->op == TokenType::minus) {
+                m_output << "    sub x0, x0, x1\n";
+            } else if (bin_expr->op == TokenType::star) {
+                m_output << "    mul x0, x0, x1\n";
+            } else if (bin_expr->op == TokenType::slash) {
+                m_output << "    sdiv x0, x0, x1\n";
+            } else if (bin_expr->op == TokenType::eq_eq) {
+                m_output << "    cmp x0, x1\n";
+                m_output << "    cset x0, eq\n";
+            } else if (bin_expr->op == TokenType::neq) {
+                m_output << "    cmp x0, x1\n";
+                m_output << "    cset x0, ne\n";
+            } else if (bin_expr->op == TokenType::lt) {
+                m_output << "    cmp x0, x1\n";
+                m_output << "    cset x0, lt\n";
+            } else if (bin_expr->op == TokenType::gt) {
+                m_output << "    cmp x0, x1\n";
+                m_output << "    cset x0, gt\n";
+            }
         }
     }
 }

@@ -1,6 +1,7 @@
 #include "generation.h"
 #include "lexer.h"
 #include "parser.h"
+#include "semantic_analysis.h"
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -44,7 +45,14 @@ int main(int argc, char *argv[]) {
   program->print(); // Visualize the AST
   std::cout << "--------------------" << std::endl;
 
-  // 3. Generation
+  // 3. Semantic Analysis
+  std::cout << "\n--- Semantic Analysis Step ---" << std::endl;
+  SemanticAnalyzer analyzer(program.get());
+  analyzer.analyze();
+  std::cout << "Semantic Checks Passed" << std::endl;
+  std::cout << "------------------------------" << std::endl;
+
+  // 4. Generation
   std::cout << "\n--- Generation Step ---" << std::endl;
   Generator generator(std::move(program));
   std::string assembly = generator.generate();

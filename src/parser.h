@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+enum class Type { Int, Void, Bool };
+
 struct Node {
   virtual ~Node() = default;
   virtual void print(int indent = 0) const = 0;
@@ -15,6 +17,12 @@ struct Expr : public Node {};
 struct IntLitExpr : public Expr {
   int value;
   IntLitExpr(int v) : value(v) {}
+  void print(int indent = 0) const override;
+};
+
+struct BoolLitExpr : public Expr {
+  bool value;
+  BoolLitExpr(bool v) : value(v) {}
   void print(int indent = 0) const override;
 };
 
@@ -29,6 +37,14 @@ struct CallExpr : public Expr {
   std::vector<std::unique_ptr<Expr>> args;
   CallExpr(std::string c, std::vector<std::unique_ptr<Expr>> a)
       : callee(std::move(c)), args(std::move(a)) {}
+  void print(int indent = 0) const override;
+};
+
+struct UnaryExpr : public Expr {
+  std::unique_ptr<Expr> operand;
+  TokenType op;
+  UnaryExpr(std::unique_ptr<Expr> o, TokenType op)
+      : operand(std::move(o)), op(op) {}
   void print(int indent = 0) const override;
 };
 
@@ -57,9 +73,10 @@ struct ExprStmt : public Stmt {
 
 struct VarDecl : public Stmt {
   std::string name;
+  Type type;
   std::unique_ptr<Expr> init;
-  VarDecl(std::string n, std::unique_ptr<Expr> i)
-      : name(std::move(n)), init(std::move(i)) {}
+  VarDecl(std::string n, Type t, std::unique_ptr<Expr> i)
+      : name(std::move(n)), type(t), init(std::move(i)) {}
   void print(int indent = 0) const override;
 };
 
@@ -98,15 +115,19 @@ struct WhileStmt : public Stmt {
 
 struct Arg {
   std::string name;
+  Type type;
 };
 
 struct Function : public Node {
   std::string name;
   std::vector<Arg> args;
   std::unique_ptr<ScopeStmt> body;
+  Type return_type;
 
-  Function(std::string n, std::vector<Arg> a, std::unique_ptr<ScopeStmt> b)
-      : name(std::move(n)), args(std::move(a)), body(std::move(b)) {}
+  Function(std::string n, std::vector<Arg> a, std::unique_ptr<ScopeStmt> b,
+           Type rt)
+      : name(std::move(n)), args(std::move(a)), body(std::move(b)),
+        return_type(rt) {}
   void print(int indent = 0) const override;
 };
 
@@ -132,8 +153,11 @@ private:
   std::unique_ptr<Stmt> parse_scope();
 
   std::unique_ptr<Expr> parse_expr();
+  std::unique_ptr<Expr> parse_logical_or();
+  std::unique_ptr<Expr> parse_logical_and();
   std::unique_ptr<Expr> parse_comparison();
   std::unique_ptr<Expr> parse_additive();
   std::unique_ptr<Expr> parse_term();
+  std::unique_ptr<Expr> parse_unary();
   std::unique_ptr<Expr> parse_factor();
 };

@@ -9,6 +9,12 @@ std::string token_to_string(const Token &token) {
     return "RETURN";
   case TokenType::_int:
     return "INT";
+  case TokenType::_bool:
+    return "BOOL";
+  case TokenType::_true:
+    return "TRUE";
+  case TokenType::_false:
+    return "FALSE";
   case TokenType::_if:
     return "IF";
   case TokenType::_else:
@@ -27,6 +33,12 @@ std::string token_to_string(const Token &token) {
     return "LT";
   case TokenType::gt:
     return "GT";
+  case TokenType::amp_amp:
+    return "AMP_AMP";
+  case TokenType::pipe_pipe:
+    return "PIPE_PIPE";
+  case TokenType::bang:
+    return "BANG";
   case TokenType::plus:
     return "PLUS";
   case TokenType::minus:
@@ -68,6 +80,12 @@ std::vector<Token> tokenize(const std::string &src) {
           tokens.push_back({TokenType::_return});
         } else if (buf == "int") {
           tokens.push_back({TokenType::_int});
+        } else if (buf == "bool") {
+          tokens.push_back({TokenType::_bool});
+        } else if (buf == "true") {
+          tokens.push_back({TokenType::_true});
+        } else if (buf == "false") {
+          tokens.push_back({TokenType::_false});
         } else if (buf == "if") {
           tokens.push_back({TokenType::_if});
         } else if (buf == "else") {
@@ -99,7 +117,22 @@ std::vector<Token> tokenize(const std::string &src) {
         tokens.push_back({TokenType::neq});
         i++; // Skip next char
       } else {
-        std::cerr << "Error: Expected '=' after '!'" << std::endl;
+        tokens.push_back({TokenType::bang});
+      }
+    } else if (c == '&') {
+      if (i + 1 < src.length() && src[i + 1] == '&') {
+        tokens.push_back({TokenType::amp_amp});
+        i++; // Skip next char
+      } else {
+        std::cerr << "Error: Expected '&' after '&'" << std::endl;
+        exit(1);
+      }
+    } else if (c == '|') {
+      if (i + 1 < src.length() && src[i + 1] == '|') {
+        tokens.push_back({TokenType::pipe_pipe});
+        i++; // Skip next char
+      } else {
+        std::cerr << "Error: Expected '|' after '|'" << std::endl;
         exit(1);
       }
     } else if (c == '<') {
