@@ -1,5 +1,0 @@
-# ninja log v7
-0	281	1767894376003828291	CMakeFiles/compiler.dir/parser.cpp.o	a255f98db8abf8d3
-0	283	1767894376003716874	CMakeFiles/compiler.dir/lexer.cpp.o	43f61cb0368e877a
-0	284	1767894376003563748	CMakeFiles/compiler.dir/main.cpp.o	a5c47867a8d81690
-284	313	1767894376287611814	compiler	5c99a95c60e8c90a
