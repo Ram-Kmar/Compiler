@@ -11,6 +11,8 @@ tests = [
     ("test_func.hy", 30),
     ("test_print.hy", 0),
     ("test_logic.hy", 42),
+    ("test_for.hy", 10),
+    ("test_ptr.hy", 20),
 ]
 
 COMPILER_PATH = "./build/compiler"

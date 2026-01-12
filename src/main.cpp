@@ -2,6 +2,7 @@
 #include "lexer.h"
 #include "parser.h"
 #include "semantic_analysis.h"
+#include "optimizer.h"
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -52,7 +53,14 @@ int main(int argc, char *argv[]) {
   std::cout << "Semantic Checks Passed" << std::endl;
   std::cout << "------------------------------" << std::endl;
 
-  // 4. Generation
+  // 4. Optimization
+  std::cout << "\n--- Optimization Step ---" << std::endl;
+  Optimizer optimizer;
+  program = optimizer.optimize(std::move(program));
+  program->print();
+  std::cout << "-------------------------" << std::endl;
+
+  // 5. Generation
   std::cout << "\n--- Generation Step ---" << std::endl;
   Generator generator(std::move(program));
   std::string assembly = generator.generate();

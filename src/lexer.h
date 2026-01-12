@@ -13,6 +13,7 @@ enum class TokenType {
   _if,
   _else,
   _while,
+  _for,
   int_lit,
   semi,
   ident,
@@ -25,6 +26,7 @@ enum class TokenType {
   neq,
   lt,
   gt,
+  amp,
   amp_amp,
   pipe_pipe,
   bang,
@@ -32,12 +34,16 @@ enum class TokenType {
   close_curly,
   open_paren,
   close_paren,
-  comma
+  comma,
+  open_bracket,
+  close_bracket
 };
 
 struct Token {
   TokenType type;
   std::variant<std::monostate, int, std::string> value;
+  int line;
+  int col;
 };
 
 std::vector<Token> tokenize(const std::string &src);

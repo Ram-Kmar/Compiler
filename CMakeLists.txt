@@ -13,4 +13,5 @@ add_executable(compiler
     src/parser.cpp
     src/generation.cpp
     src/semantic_analysis.cpp
+    src/optimizer.cpp
 )

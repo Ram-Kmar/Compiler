@@ -1,20 +1,12 @@
 #pragma once
 #include "parser.h"
-#include <string>
-#include <sstream>
-#include <unordered_map>
+#include <memory>
 #include <vector>
 
-struct VarInfo {
-    size_t stack_offset;
-};
-
-class Generator : public Visitor {
+class Optimizer : public Visitor {
 public:
-    explicit Generator(std::unique_ptr<Program> root);
-    std::string generate();
+    std::unique_ptr<Program> optimize(std::unique_ptr<Program> program);
 
-    // Visitor Implementation
     void visit(const IntLitExpr* node) override;
     void visit(const BoolLitExpr* node) override;
     void visit(const IdentifierExpr* node) override;
@@ -36,18 +28,27 @@ public:
     void visit(const Program* node) override;
 
 private:
-    std::unique_ptr<Program> m_root;
-    std::stringstream m_output;
-    size_t m_stack_ptr = 0;
-    int m_label_count = 0;
-    
-    // Stack of scopes. Each scope is a map of variable names to their info.
-    std::vector<std::unordered_map<std::string, VarInfo>> m_scopes;
-    
-    // Helpers
-    std::string create_label();
-    void push_scope();
-    void pop_scope();
-    void declare_var(const std::string& name, std::optional<int> array_size = std::nullopt);
-    std::optional<VarInfo> find_var(const std::string& name);
+    std::unique_ptr<Node> m_last_node;
+
+    template<typename T>
+    std::unique_ptr<T> transform(const T* node) {
+        if (!node) return nullptr;
+        node->accept(this);
+        auto result = std::unique_ptr<T>(static_cast<T*>(m_last_node.release()));
+        return result;
+    }
+
+    std::unique_ptr<Expr> transform_expr(const Expr* node) {
+        if (!node) return nullptr;
+        node->accept(this);
+        auto result = std::unique_ptr<Expr>(static_cast<Expr*>(m_last_node.release()));
+        return result;
+    }
+
+    std::unique_ptr<Stmt> transform_stmt(const Stmt* node) {
+        if (!node) return nullptr;
+        node->accept(this);
+        auto result = std::unique_ptr<Stmt>(static_cast<Stmt*>(m_last_node.release()));
+        return result;
+    }
 };

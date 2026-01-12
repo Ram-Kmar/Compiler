@@ -4,163 +4,198 @@
 #include <sstream>
 
 std::string token_to_string(const Token &token) {
+  std::string s;
   switch (token.type) {
   case TokenType::_return:
-    return "RETURN";
+    s = "RETURN"; break;
   case TokenType::_int:
-    return "INT";
+    s = "INT"; break;
   case TokenType::_bool:
-    return "BOOL";
+    s = "BOOL"; break;
   case TokenType::_true:
-    return "TRUE";
+    s = "TRUE"; break;
   case TokenType::_false:
-    return "FALSE";
+    s = "FALSE"; break;
   case TokenType::_if:
-    return "IF";
+    s = "IF"; break;
   case TokenType::_else:
-    return "ELSE";
+    s = "ELSE"; break;
   case TokenType::_while:
-    return "WHILE";
+    s = "WHILE"; break;
+  case TokenType::_for:
+    s = "FOR"; break;
   case TokenType::semi:
-    return "SEMI";
+    s = "SEMI"; break;
   case TokenType::eq:
-    return "EQUALS";
+    s = "EQUALS"; break;
   case TokenType::eq_eq:
-    return "EQ_EQ";
+    s = "EQ_EQ"; break;
   case TokenType::neq:
-    return "NEQ";
+    s = "NEQ"; break;
   case TokenType::lt:
-    return "LT";
+    s = "LT"; break;
   case TokenType::gt:
-    return "GT";
+    s = "GT"; break;
+  case TokenType::amp:
+    s = "AMP"; break;
   case TokenType::amp_amp:
-    return "AMP_AMP";
+    s = "AMP_AMP"; break;
   case TokenType::pipe_pipe:
-    return "PIPE_PIPE";
+    s = "PIPE_PIPE"; break;
   case TokenType::bang:
-    return "BANG";
+    s = "BANG"; break;
   case TokenType::plus:
-    return "PLUS";
+    s = "PLUS"; break;
   case TokenType::minus:
-    return "MINUS";
+    s = "MINUS"; break;
   case TokenType::star:
-    return "STAR";
+    s = "STAR"; break;
   case TokenType::slash:
-    return "SLASH";
+    s = "SLASH"; break;
   case TokenType::open_curly:
-    return "OPEN_CURLY";
+    s = "OPEN_CURLY"; break;
   case TokenType::close_curly:
-    return "CLOSE_CURLY";
+    s = "CLOSE_CURLY"; break;
   case TokenType::open_paren:
-    return "OPEN_PAREN";
+    s = "OPEN_PAREN"; break;
   case TokenType::close_paren:
-    return "CLOSE_PAREN";
+    s = "CLOSE_PAREN"; break;
   case TokenType::comma:
-    return "COMMA";
+    s = "COMMA"; break;
+  case TokenType::open_bracket:
+    s = "OPEN_BRACKET"; break;
+  case TokenType::close_bracket:
+    s = "CLOSE_BRACKET"; break;
   case TokenType::int_lit:
-    return "INT_LIT(" + std::to_string(std::get<int>(token.value)) + ")";
+    s = "INT_LIT(" + std::to_string(std::get<int>(token.value)) + ")"; break;
   case TokenType::ident:
-    return "IDENT(" + std::get<std::string>(token.value) + ")";
+    s = "IDENT(" + std::get<std::string>(token.value) + ")"; break;
   default:
-    return "UNKNOWN";
+    s = "UNKNOWN"; break;
   }
+  return s + " (" + std::to_string(token.line) + ":" + std::to_string(token.col) + ")";
 }
 
 std::vector<Token> tokenize(const std::string &src) {
   std::vector<Token> tokens;
   std::string buf;
+  int line = 1;
+  int col = 1;
 
   for (int i = 0; i < src.length(); i++) {
     char c = src[i];
+    int start_col = col;
 
     if (std::isalpha(c)) {
       buf.push_back(c);
-      if (i + 1 >= src.length() || !std::isalnum(src[i + 1])) {
-        if (buf == "return") {
-          tokens.push_back({TokenType::_return});
-        } else if (buf == "int") {
-          tokens.push_back({TokenType::_int});
-        } else if (buf == "bool") {
-          tokens.push_back({TokenType::_bool});
-        } else if (buf == "true") {
-          tokens.push_back({TokenType::_true});
-        } else if (buf == "false") {
-          tokens.push_back({TokenType::_false});
-        } else if (buf == "if") {
-          tokens.push_back({TokenType::_if});
-        } else if (buf == "else") {
-          tokens.push_back({TokenType::_else});
-        } else if (buf == "while") {
-          tokens.push_back({TokenType::_while});
-        } else {
-          tokens.push_back({TokenType::ident, buf});
-        }
-        buf.clear();
+      col++;
+      while (i + 1 < src.length() && std::isalnum(src[i + 1])) {
+        buf.push_back(src[++i]);
+        col++;
       }
+      
+      TokenType type;
+      if (buf == "return") type = TokenType::_return;
+      else if (buf == "int") type = TokenType::_int;
+      else if (buf == "bool") type = TokenType::_bool;
+      else if (buf == "true") type = TokenType::_true;
+      else if (buf == "false") type = TokenType::_false;
+      else if (buf == "if") type = TokenType::_if;
+      else if (buf == "else") type = TokenType::_else;
+      else if (buf == "while") type = TokenType::_while;
+      else if (buf == "for") type = TokenType::_for;
+      else {
+        tokens.push_back({TokenType::ident, buf, line, start_col});
+        buf.clear();
+        continue;
+      }
+      tokens.push_back({type, std::monostate{}, line, start_col});
+      buf.clear();
     } else if (std::isdigit(c)) {
       buf.push_back(c);
-      if (i + 1 >= src.length() || !std::isdigit(src[i + 1])) {
-        tokens.push_back({TokenType::int_lit, std::stoi(buf)});
-        buf.clear();
+      col++;
+      while (i + 1 < src.length() && std::isdigit(src[i + 1])) {
+        buf.push_back(src[++i]);
+        col++;
       }
+      tokens.push_back({TokenType::int_lit, std::stoi(buf), line, start_col});
+      buf.clear();
     } else if (c == ';') {
-      tokens.push_back({TokenType::semi});
+      tokens.push_back({TokenType::semi, std::monostate{}, line, col++});
     } else if (c == '=') {
       if (i + 1 < src.length() && src[i + 1] == '=') {
-        tokens.push_back({TokenType::eq_eq});
-        i++; // Skip next char
+        tokens.push_back({TokenType::eq_eq, std::monostate{}, line, col});
+        i++; col += 2;
       } else {
-        tokens.push_back({TokenType::eq});
+        tokens.push_back({TokenType::eq, std::monostate{}, line, col++});
       }
     } else if (c == '!') {
       if (i + 1 < src.length() && src[i + 1] == '=') {
-        tokens.push_back({TokenType::neq});
-        i++; // Skip next char
+        tokens.push_back({TokenType::neq, std::monostate{}, line, col});
+        i++; col += 2;
       } else {
-        tokens.push_back({TokenType::bang});
+        tokens.push_back({TokenType::bang, std::monostate{}, line, col++});
       }
     } else if (c == '&') {
       if (i + 1 < src.length() && src[i + 1] == '&') {
-        tokens.push_back({TokenType::amp_amp});
-        i++; // Skip next char
+        tokens.push_back({TokenType::amp_amp, std::monostate{}, line, col});
+        i++; col += 2;
       } else {
-        std::cerr << "Error: Expected '&' after '&'" << std::endl;
-        exit(1);
+        tokens.push_back({TokenType::amp, std::monostate{}, line, col++});
       }
     } else if (c == '|') {
       if (i + 1 < src.length() && src[i + 1] == '|') {
-        tokens.push_back({TokenType::pipe_pipe});
-        i++; // Skip next char
+        tokens.push_back({TokenType::pipe_pipe, std::monostate{}, line, col});
+        i++; col += 2;
       } else {
-        std::cerr << "Error: Expected '|' after '|'" << std::endl;
+        std::cerr << "Error: Expected '|' after '|' at " << line << ":" << col << std::endl;
         exit(1);
       }
     } else if (c == '<') {
-      tokens.push_back({TokenType::lt});
+      tokens.push_back({TokenType::lt, std::monostate{}, line, col++});
     } else if (c == '>') {
-      tokens.push_back({TokenType::gt});
+      tokens.push_back({TokenType::gt, std::monostate{}, line, col++});
     } else if (c == '+') {
-      tokens.push_back({TokenType::plus});
+      tokens.push_back({TokenType::plus, std::monostate{}, line, col++});
     } else if (c == '-') {
-      tokens.push_back({TokenType::minus});
+      tokens.push_back({TokenType::minus, std::monostate{}, line, col++});
     } else if (c == '*') {
-      tokens.push_back({TokenType::star});
+      tokens.push_back({TokenType::star, std::monostate{}, line, col++});
     } else if (c == '/') {
-      tokens.push_back({TokenType::slash});
+      if (i + 1 < src.length() && src[i + 1] == '/') {
+        i++; // Skip the second '/'
+        col += 2;
+        while (i + 1 < src.length() && src[i + 1] != '\n') {
+          i++;
+          col++;
+        }
+      } else {
+        tokens.push_back({TokenType::slash, std::monostate{}, line, col++});
+      }
     } else if (c == '{') {
-      tokens.push_back({TokenType::open_curly});
+      tokens.push_back({TokenType::open_curly, std::monostate{}, line, col++});
     } else if (c == '}') {
-      tokens.push_back({TokenType::close_curly});
+      tokens.push_back({TokenType::close_curly, std::monostate{}, line, col++});
     } else if (c == '(') {
-      tokens.push_back({TokenType::open_paren});
+      tokens.push_back({TokenType::open_paren, std::monostate{}, line, col++});
     } else if (c == ')') {
-      tokens.push_back({TokenType::close_paren});
+      tokens.push_back({TokenType::close_paren, std::monostate{}, line, col++});
     } else if (c == ',') {
-      tokens.push_back({TokenType::comma});
+      tokens.push_back({TokenType::comma, std::monostate{}, line, col++});
+    } else if (c == '[') {
+      tokens.push_back({TokenType::open_bracket, std::monostate{}, line, col++});
+    } else if (c == ']') {
+      tokens.push_back({TokenType::close_bracket, std::monostate{}, line, col++});
     } else if (std::isspace(c)) {
+      if (c == '\n') {
+        line++;
+        col = 1;
+      } else {
+        col++;
+      }
       continue;
     } else {
-      std::cerr << "Error: Unknown character '" << c << "'" << std::endl;
+      std::cerr << "Error: Unknown character '" << c << "' at " << line << ":" << col << std::endl;
       exit(1);
     }
   }
