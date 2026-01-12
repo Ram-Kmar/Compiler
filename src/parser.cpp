@@ -140,12 +140,6 @@ void Program::print(int indent) const {
 
 Parser::Parser(std::vector<Token> tokens) : m_tokens(std::move(tokens)) {}
 
-class Parser {
-public:
-  Parser(std::vector<Token> tokens) : m_tokens(std::move(tokens)) {}
-
-}
-
 std::unique_ptr<Expr>
 Parser::parse_expr() {
   return parse_comparison();
