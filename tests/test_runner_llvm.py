@@ -19,8 +19,8 @@ tests = [
 ]
 
 COMPILER_PATH = os.path.join(SCRIPT_DIR, "../build/compiler")
-ASM_OUTPUT = os.path.join(SCRIPT_DIR, "out.s")
-EXECUTABLE = os.path.join(SCRIPT_DIR, "test_bin")
+LLVM_OUTPUT = os.path.join(SCRIPT_DIR, "out.ll")
+EXECUTABLE = os.path.join(SCRIPT_DIR, "test_bin_llvm")
 
 def run_command(command):
     result = subprocess.run(command, shell=True, capture_output=True, text=True)
@@ -44,8 +44,7 @@ def main():
             failed += 1
             continue
 
-        # 1. Compile .hy to .s
-        # We run the command in SCRIPT_DIR so out.s is generated there
+        # 1. Compile .hy to .ll (and .s)
         compile_cmd = f"{COMPILER_PATH} {filepath}"
         compile_res = subprocess.run(compile_cmd, shell=True, capture_output=True, text=True, cwd=SCRIPT_DIR)
         
@@ -55,13 +54,18 @@ def main():
             failed += 1
             continue
 
-        # 2. Assemble .s to executable
-        assemble_cmd = f"clang -o {EXECUTABLE} {ASM_OUTPUT}"
+        if not os.path.exists(LLVM_OUTPUT):
+             print(f"{filename:<20} | {'NO LLVM OUT':<10} | {expected:<10} | {'-':<10}")
+             failed += 1
+             continue
+
+        # 2. Compile .ll to executable using clang
+        assemble_cmd = f"clang -Wno-override-module -o {EXECUTABLE} {LLVM_OUTPUT}"
         assemble_res = run_command(assemble_cmd)
 
         if assemble_res.returncode != 0:
-            print(f"{filename:<20} | {'ASM ERR':<10} | {expected:<10} | {'-':<10}")
-            print(f"  Assembler Error: {assemble_res.stderr}")
+            print(f"{filename:<20} | {'CLANG ERR':<10} | {expected:<10} | {'-':<10}")
+            print(f"  Clang Error: {assemble_res.stderr}")
             failed += 1
             continue
 
@@ -80,10 +84,10 @@ def main():
     print(f"Results: {passed} Passed, {failed} Failed")
     
     # Cleanup
-    if os.path.exists(ASM_OUTPUT):
-        os.remove(ASM_OUTPUT)
-    if os.path.exists(os.path.join(SCRIPT_DIR, "out.ll")):
-        os.remove(os.path.join(SCRIPT_DIR, "out.ll"))
+    if os.path.exists(LLVM_OUTPUT):
+        os.remove(LLVM_OUTPUT)
+    if os.path.exists(os.path.join(SCRIPT_DIR, "out.s")):
+        os.remove(os.path.join(SCRIPT_DIR, "out.s"))
     if os.path.exists(EXECUTABLE):
         os.remove(EXECUTABLE)
 

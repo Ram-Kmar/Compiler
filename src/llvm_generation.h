@@ -5,13 +5,14 @@
 #include <unordered_map>
 #include <vector>
 
-struct VarInfo {
-    size_t stack_offset;
+struct LLVMVarInfo {
+    std::string name;
+    Type type;
 };
 
-class Generator : public Visitor {
+class LLVMGenerator : public Visitor {
 public:
-    explicit Generator(const Program* root);
+    explicit LLVMGenerator(const Program* root);
     std::string generate();
 
     // Visitor Implementation
@@ -38,16 +39,21 @@ public:
 private:
     const Program* m_root;
     std::stringstream m_output;
-    size_t m_stack_ptr = 0;
+    int m_reg_count = 0;
     int m_label_count = 0;
     
-    // Stack of scopes. Each scope is a map of variable names to their info.
-    std::vector<std::unordered_map<std::string, VarInfo>> m_scopes;
+    // Stack of scopes. Each scope is a map of variable names to their LLVM register name.
+    std::vector<std::unordered_map<std::string, LLVMVarInfo>> m_scopes;
     
+    // Last generated register
+    std::string m_last_reg;
+
     // Helpers
-    std::string create_label();
+    std::string new_reg();
+    std::string new_label();
     void push_scope();
     void pop_scope();
-    void declare_var(const std::string& name, std::optional<int> array_size = std::nullopt);
-    std::optional<VarInfo> find_var(const std::string& name);
+    void declare_var(const std::string& name, Type type);
+    std::optional<LLVMVarInfo> find_var(const std::string& name);
+    std::string to_llvm_type(Type type);
 };

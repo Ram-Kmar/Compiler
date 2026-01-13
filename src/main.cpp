@@ -1,4 +1,5 @@
 #include "generation.h"
+#include "llvm_generation.h"
 #include "lexer.h"
 #include "parser.h"
 #include "semantic_analysis.h"
@@ -60,16 +61,28 @@ int main(int argc, char *argv[]) {
   program->print();
   std::cout << "-------------------------" << std::endl;
 
-  // 5. Generation
-  std::cout << "\n--- Generation Step ---" << std::endl;
-  Generator generator(std::move(program));
+  // 5. ARM64 Generation
+  std::cout << "\n--- ARM64 Generation Step ---" << std::endl;
+  Generator generator(program.get());
   std::string assembly = generator.generate();
-  std::cout << assembly << std::endl; // Print assembly to console
+  std::cout << assembly << std::endl; 
   std::cout << "-----------------------" << std::endl;
 
   {
     std::fstream file("out.s", std::ios::out);
     file << assembly;
+  }
+
+  // 6. LLVM IR Generation
+  std::cout << "\n--- LLVM IR Generation Step ---" << std::endl;
+  LLVMGenerator llvm_generator(program.get());
+  std::string llvm_ir = llvm_generator.generate();
+  std::cout << llvm_ir << std::endl;
+  std::cout << "------------------------------" << std::endl;
+
+  {
+    std::fstream file("out.ll", std::ios::out);
+    file << llvm_ir;
   }
 
   return EXIT_SUCCESS;

@@ -1,7 +1,7 @@
 #include "generation.h"
 #include <iostream>
 
-Generator::Generator(std::unique_ptr<Program> root) : m_root(std::move(root)) {
+Generator::Generator(const Program* root) : m_root(root) {
 }
 
 std::string Generator::create_label() {

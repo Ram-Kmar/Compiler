@@ -12,6 +12,7 @@ add_executable(compiler
     src/lexer.cpp 
     src/parser.cpp
     src/generation.cpp
+    src/llvm_generation.cpp
     src/semantic_analysis.cpp
     src/optimizer.cpp
 )
