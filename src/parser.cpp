@@ -4,6 +4,9 @@
 
 void print_indent(int indent) { std::cout << std::string(indent * 2, ' '); }
 
+// --- Node Printing Implementations ---
+// These methods are used for debugging the AST structure.
+
 void IntLitExpr::print(int indent) const {
   print_indent(indent);
   std::cout << "IntLit(" << value << ") at " << line << ":" << col << std::endl;
@@ -156,10 +159,6 @@ void ScopeStmt::print(int indent) const {
   }
 }
 
-void ScopeStmt::print(int indent) const {
-  print_indent(indent);
-}
-
 void IfStmt::print(int indent) const {
   print_indent(indent);
   std::cout << "IfStmt at " << line << ":" << col << ":" << std::endl;
@@ -234,6 +233,8 @@ void Program::print(int indent) const {
   }
 }
 
+// --- Parser Implementation ---
+
 Parser::Parser(std::vector<Token> tokens) : m_tokens(std::move(tokens)) {}
 
 void Parser::report_error(const std::string& message, std::optional<Token> token) const {
@@ -250,11 +251,12 @@ void Parser::report_error(const std::string& message, std::optional<Token> token
     exit(1);
 }
 
-std::unique_ptr<Expr>
-Parser::parse_expr() {
+// Top-level expression parser. Starts with the lowest precedence operators (logical OR).
+std::unique_ptr<Expr> Parser::parse_expr() {
   return parse_logical_or();
 }
 
+// Parses logical OR (||)
 std::unique_ptr<Expr> Parser::parse_logical_or() {
   auto lhs = parse_logical_and();
   while (peek().has_value()) {
@@ -272,6 +274,7 @@ std::unique_ptr<Expr> Parser::parse_logical_or() {
   return lhs;
 }
 
+// Parses logical AND (&&)
 std::unique_ptr<Expr> Parser::parse_logical_and() {
   auto lhs = parse_comparison();
   while (peek().has_value()) {
@@ -289,6 +292,7 @@ std::unique_ptr<Expr> Parser::parse_logical_and() {
   return lhs;
 }
 
+// Parses comparison operators (==, !=, <, >)
 std::unique_ptr<Expr> Parser::parse_comparison() {
   auto lhs = parse_additive();
   while (peek().has_value()) {
@@ -309,6 +313,7 @@ std::unique_ptr<Expr> Parser::parse_comparison() {
   return lhs;
 }
 
+// Parses additive operators (+, -)
 std::unique_ptr<Expr> Parser::parse_additive() {
   auto lhs = parse_term();
   while (peek().has_value()) {
@@ -327,6 +332,7 @@ std::unique_ptr<Expr> Parser::parse_additive() {
   return lhs;
 }
 
+// Parses multiplicative operators (*, /)
 std::unique_ptr<Expr> Parser::parse_term() {
   auto lhs = parse_unary();
   while (peek().has_value()) {
@@ -345,6 +351,7 @@ std::unique_ptr<Expr> Parser::parse_term() {
   return lhs;
 }
 
+// Parses unary operators (!, *, &)
 std::unique_ptr<Expr> Parser::parse_unary() {
   if (peek().has_value()) {
       if (peek().value().type == TokenType::bang) {
@@ -354,14 +361,14 @@ std::unique_ptr<Expr> Parser::parse_unary() {
             report_error("Expected expression after '!'", op);
         }
         return std::make_unique<UnaryExpr>(std::move(operand), op.type, op.line, op.col);
-      } else if (peek().value().type == TokenType::star) {
+      } else if (peek().value().type == TokenType::star) { // Dereference *p
         Token op = consume();
         auto operand = parse_unary(); // Right-associative: **x -> *(*x)
         if (!operand) {
             report_error("Expected expression after '*'", op);
         }
         return std::make_unique<UnaryExpr>(std::move(operand), op.type, op.line, op.col);
-      } else if (peek().value().type == TokenType::amp) {
+      } else if (peek().value().type == TokenType::amp) { // Address-of &x
         Token op = consume();
         auto operand = parse_unary();
         if (!operand) {
@@ -373,6 +380,7 @@ std::unique_ptr<Expr> Parser::parse_unary() {
   return parse_factor();
 }
 
+// Parses atomic expressions: literals, identifiers, array access, function calls, parenthesized expressions.
 std::unique_ptr<Expr> Parser::parse_factor() {
   if (peek().has_value()) {
     if (peek().value().type == TokenType::int_lit) {
@@ -385,9 +393,9 @@ std::unique_ptr<Expr> Parser::parse_factor() {
       auto token = consume();
       return std::make_unique<BoolLitExpr>(false, token.line, token.col);
     } else if (peek().value().type == TokenType::ident) {
-      // Check for CallExpr
+      // Check for CallExpr or ArrayAccessExpr
       if (peek(1).has_value() &&
-          peek(1).value().type == TokenType::open_paren) {
+          peek(1).value().type == TokenType::open_paren) { // Function Call: foo(...)
         auto token = consume();
         std::string name = std::get<std::string>(token.value);
         consume(); // Eat '('
@@ -411,7 +419,7 @@ std::unique_ptr<Expr> Parser::parse_factor() {
           report_error("Expected ')' after function call arguments");
         }
       } else if (peek(1).has_value() &&
-                 peek(1).value().type == TokenType::open_bracket) {
+                 peek(1).value().type == TokenType::open_bracket) { // Array Access: arr[...]
         auto token = consume();
         std::string name = std::get<std::string>(token.value);
         consume(); // Eat '['
@@ -422,12 +430,12 @@ std::unique_ptr<Expr> Parser::parse_factor() {
         } else {
             report_error("Expected ']' after array index");
         }
-      } else {
+      } else { // Plain identifier
         auto token = consume();
         return std::make_unique<IdentifierExpr>(
             std::get<std::string>(token.value), token.line, token.col);
       }
-    } else if (peek().value().type == TokenType::open_paren) {
+    } else if (peek().value().type == TokenType::open_paren) { // Grouping: (expr)
       consume(); // Eat '('
       auto expr = parse_expr();
       if (peek().has_value() && peek().value().type == TokenType::close_paren) {
@@ -441,6 +449,7 @@ std::unique_ptr<Expr> Parser::parse_factor() {
   return nullptr;
 }
 
+// Parses a block of statements enclosed in {}
 std::unique_ptr<Stmt> Parser::parse_scope() {
   if (peek().has_value() && peek().value().type == TokenType::open_curly) {
     auto start_token = consume(); // Eat '{'
@@ -464,10 +473,12 @@ std::unique_ptr<Stmt> Parser::parse_scope() {
   return nullptr;
 }
 
+// Parses a single statement.
 std::unique_ptr<Stmt> Parser::parse_stmt() {
   if (!peek().has_value())
     return nullptr;
 
+  // Return statement
   if (peek().value().type == TokenType::_return) {
     auto start_token = consume();
     auto expr = parse_expr();
@@ -481,6 +492,7 @@ std::unique_ptr<Stmt> Parser::parse_stmt() {
     }
     return std::make_unique<ReturnStmt>(std::move(expr), start_token.line, start_token.col);
   } else if (peek().value().type == TokenType::_int || peek().value().type == TokenType::_bool) {
+    // Variable declaration: int x = 5; or int* p;
     auto type_token = consume();
     Type type = (type_token.type == TokenType::_int) ? Type::Int() : Type::Bool();
     
@@ -527,8 +539,8 @@ std::unique_ptr<Stmt> Parser::parse_stmt() {
     }
   } else if (peek().value().type == TokenType::ident) {
     auto start_token = peek().value();
-    // Lookahead to see if it's assignment or call
-    if (peek(1).has_value() && peek(1).value().type == TokenType::eq) {
+    // Lookahead to see if it's assignment or call or array assignment
+    if (peek(1).has_value() && peek(1).value().type == TokenType::eq) { // Assignment: x = 5;
       auto name_token = consume();
       std::string name = std::get<std::string>(name_token.value);
       consume(); // Eat '='
@@ -542,7 +554,7 @@ std::unique_ptr<Stmt> Parser::parse_stmt() {
         report_error("Expected ';' after assignment");
       }
       return std::make_unique<AssignStmt>(name, std::move(expr), start_token.line, start_token.col);
-    } else if (peek(1).has_value() && peek(1).value().type == TokenType::open_bracket) {
+    } else if (peek(1).has_value() && peek(1).value().type == TokenType::open_bracket) { // Array Assignment: x[0] = 5;
       auto name_token = consume();
       std::string name = std::get<std::string>(name_token.value);
       consume(); // Eat '['
@@ -559,7 +571,7 @@ std::unique_ptr<Stmt> Parser::parse_stmt() {
           } else { report_error("Expected '=' after array index"); }
       } else { report_error("Expected ']' after array index"); }
     } else if (peek(1).has_value() &&
-               peek(1).value().type == TokenType::open_paren) {
+               peek(1).value().type == TokenType::open_paren) { // Expression statement (e.g., function call): foo();
       auto expr = parse_expr();
       if (peek().has_value() && peek().value().type == TokenType::semi) {
         consume();
@@ -570,21 +582,16 @@ std::unique_ptr<Stmt> Parser::parse_stmt() {
     } else {
       report_error("Unexpected identifier or missing assignment.");
     }
-  } else if (peek().value().type == TokenType::star) { // *p = 10;
+  } else if (peek().value().type == TokenType::star) { // Pointer assignment: *p = 10;
     auto start_token = consume(); // Eat '*'
-    // This is tricky. parse_expr() would parse *p. 
-    // We need to verify we have an expression that ends with assignment.
-    // Actually, we can just say: if we see *, parse a UnaryExpr. 
-    // BUT parse_stmt needs to distinguish *p (expr stmt?) vs *p = 10 (assign stmt).
-    // Let's manually parse the pointer part.
-    // It must be a UnaryExpr (dereference).
-    // Or we can cheat: parse_expr() for the LHS, check if it is valid for assignment, then look for '='.
-    // But parse_expr eats logical ORs etc.
-    // Let's assume *<expr> = <expr>;
-    // We can use parse_unary() to get the LHS *ptr.
-    // But we consumed the star already.
-    auto ptr_expr = parse_unary(); // This parses 'p' in '*p'.
-    // So LHS is UnaryExpr(ptr_expr, star).
+    // This is tricky. We need to distinguish between *p (expression statement?) and *p = 10 (assignment).
+    // Our grammar likely doesn't support bare *p; as a statement unless it's an assignment.
+    // We assume it's an assignment.
+    
+    // We consumed the star already. We parse the rest of the unary expression for the pointer part.
+    // This parses 'p' in '*p'.
+    auto ptr_expr = parse_unary(); 
+    
     // Now check for =
     if (peek().has_value() && peek().value().type == TokenType::eq) {
         consume(); // Eat '='
@@ -596,9 +603,9 @@ std::unique_ptr<Stmt> Parser::parse_stmt() {
     } else {
          report_error("Expected '=' after pointer dereference in statement");
     }
-  } else if (peek().value().type == TokenType::open_curly) {
+  } else if (peek().value().type == TokenType::open_curly) { // Scope block
     return parse_scope();
-  } else if (peek().value().type == TokenType::_if) {
+  } else if (peek().value().type == TokenType::_if) { // If statement
     auto start_token = consume(); // Eat 'if'
     if (peek().has_value() && peek().value().type == TokenType::open_paren) {
       consume(); // Eat '('
@@ -627,7 +634,7 @@ std::unique_ptr<Stmt> Parser::parse_stmt() {
     } else {
       report_error("Expected '(' after if");
     }
-  } else if (peek().value().type == TokenType::_while) {
+  } else if (peek().value().type == TokenType::_while) { // While loop
     auto start_token = consume(); // Eat 'while'
     if (peek().has_value() && peek().value().type == TokenType::open_paren) {
       consume(); // Eat '('
@@ -649,7 +656,7 @@ std::unique_ptr<Stmt> Parser::parse_stmt() {
     } else {
       report_error("Expected '(' after while");
     }
-  } else if (peek().value().type == TokenType::_for) {
+  } else if (peek().value().type == TokenType::_for) { // For loop
     auto start_token = consume(); // Eat 'for'
     if (peek().has_value() && peek().value().type == TokenType::open_paren) {
       consume(); // Eat '('
@@ -817,12 +824,18 @@ std::unique_ptr<Function> Parser::parse_function() {
   return std::make_unique<Function>(name, args, std::move(scope_ptr), return_type, start_token.line, start_token.col);
 }
 
+// Entry point for parsing. Parses a list of globals and functions.
 std::unique_ptr<Program> Parser::parse_program() {
   auto program = std::make_unique<Program>();
   while (peek().has_value()) {
     bool is_func = false;
+    // Lookahead to distinguish between global variable declaration and function definition.
+    // Both start with a type (int/bool).
+    // Function: int foo() ...
+    // Variable: int foo; or int foo = ...
     bool is_type = peek(0).has_value() && (peek(0).value().type == TokenType::_int || peek(0).value().type == TokenType::_bool);
     
+    //This is it is function declaration.
     if (is_type &&
         peek(1).has_value() && peek(1).value().type == TokenType::ident &&
         peek(2).has_value() && peek(2).value().type == TokenType::open_paren) {

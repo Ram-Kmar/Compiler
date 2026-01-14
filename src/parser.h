@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+// Represents a data type in the language (e.g., int, bool, int*, int**)
 struct Type {
   enum class Base { Int, Void, Bool } base;
   int ptr_level = 0; // 0 = value, 1 = *, 2 = **
@@ -21,6 +22,7 @@ struct Type {
   static Type Void() { return {Base::Void, 0}; }
 };
 
+// Forward declarations for AST nodes
 struct IntLitExpr;
 struct BoolLitExpr;
 struct IdentifierExpr;
@@ -41,6 +43,8 @@ struct ForStmt;
 struct Function;
 struct Program;
 
+// Visitor interface for the Visitor design pattern.
+// Allows traversing the AST and performing operations on nodes without modifying the node classes.
 class Visitor {
 public:
   virtual ~Visitor() = default;
@@ -65,19 +69,22 @@ public:
   virtual void visit(const Program* node) = 0;
 };
 
+// Base class for all AST nodes.
 struct Node {
   int line;
   int col;
   Node(int l, int c) : line(l), col(c) {}
   virtual ~Node() = default;
-  virtual void print(int indent = 0) const = 0;
-  virtual void accept(Visitor* visitor) const = 0;
+  virtual void print(int indent = 0) const = 0; // For debugging
+  virtual void accept(Visitor* visitor) const = 0; // Entry point for visitors
 };
 
+// Base class for expressions (nodes that evaluate to a value).
 struct Expr : public Node {
   using Node::Node;
 };
 
+// Integer literal (e.g., 42)
 struct IntLitExpr : public Expr {
   int value;
   IntLitExpr(int v, int l, int c) : Expr(l, c), value(v) {}
@@ -85,6 +92,7 @@ struct IntLitExpr : public Expr {
   void accept(Visitor* visitor) const override { visitor->visit(this); }
 };
 
+// Boolean literal (e.g., true, false)
 struct BoolLitExpr : public Expr {
   bool value;
   BoolLitExpr(bool v, int l, int c) : Expr(l, c), value(v) {}
@@ -92,6 +100,7 @@ struct BoolLitExpr : public Expr {
   void accept(Visitor* visitor) const override { visitor->visit(this); }
 };
 
+// Identifier reference (e.g., variable name)
 struct IdentifierExpr : public Expr {
   std::string name;
   IdentifierExpr(std::string n, int l, int c) : Expr(l, c), name(std::move(n)) {}
@@ -99,6 +108,7 @@ struct IdentifierExpr : public Expr {
   void accept(Visitor* visitor) const override { visitor->visit(this); }
 };
 
+// Array access (e.g., arr[i])
 struct ArrayAccessExpr : public Expr {
   std::string name;
   std::unique_ptr<Expr> index;
@@ -108,6 +118,7 @@ struct ArrayAccessExpr : public Expr {
   void accept(Visitor* visitor) const override { visitor->visit(this); }
 };
 
+// Function call (e.g., foo(a, b))
 struct CallExpr : public Expr {
   std::string callee;
   std::vector<std::unique_ptr<Expr>> args;
@@ -117,6 +128,7 @@ struct CallExpr : public Expr {
   void accept(Visitor* visitor) const override { visitor->visit(this); }
 };
 
+// Unary operation (e.g., -x, !x, *ptr, &x)
 struct UnaryExpr : public Expr {
   std::unique_ptr<Expr> operand;
   TokenType op;
@@ -126,6 +138,7 @@ struct UnaryExpr : public Expr {
   void accept(Visitor* visitor) const override { visitor->visit(this); }
 };
 
+// Binary operation (e.g., a + b, x == y)
 struct BinaryExpr : public Expr {
   std::unique_ptr<Expr> lhs;
   std::unique_ptr<Expr> rhs;
@@ -136,10 +149,12 @@ struct BinaryExpr : public Expr {
   void accept(Visitor* visitor) const override { visitor->visit(this); }
 };
 
+// Base class for statements (nodes that perform an action).
 struct Stmt : public Node {
   using Node::Node;
 };
 
+// Return statement (e.g., return 0;)
 struct ReturnStmt : public Stmt {
   std::unique_ptr<Expr> expr;
   ReturnStmt(std::unique_ptr<Expr> e, int l, int c);
@@ -147,6 +162,7 @@ struct ReturnStmt : public Stmt {
   void accept(Visitor* visitor) const override { visitor->visit(this); }
 };
 
+// Expression statement (e.g., x++; or foo();)
 struct ExprStmt : public Stmt {
   std::unique_ptr<Expr> expr;
   ExprStmt(std::unique_ptr<Expr> e, int l, int c) : Stmt(l, c), expr(std::move(e)) {}
@@ -154,17 +170,19 @@ struct ExprStmt : public Stmt {
   void accept(Visitor* visitor) const override { visitor->visit(this); }
 };
 
+// Variable declaration (e.g., int x = 5;)
 struct VarDecl : public Stmt {
   std::string name;
   Type type;
   std::unique_ptr<Expr> init;
-  std::optional<int> array_size;
+  std::optional<int> array_size; // Present if it's an array declaration
   VarDecl(std::string n, Type t, std::unique_ptr<Expr> i, int l, int c, std::optional<int> as = std::nullopt)
       : Stmt(l, c), name(std::move(n)), type(t), init(std::move(i)), array_size(as) {}
   void print(int indent = 0) const override;
   void accept(Visitor* visitor) const override { visitor->visit(this); }
 };
 
+// Variable assignment (e.g., x = 10;)
 struct AssignStmt : public Stmt {
   std::string name;
   std::unique_ptr<Expr> value;
@@ -174,6 +192,7 @@ struct AssignStmt : public Stmt {
   void accept(Visitor* visitor) const override { visitor->visit(this); }
 };
 
+// Array element assignment (e.g., arr[0] = 5;)
 struct ArrayAssignStmt : public Stmt {
   std::string name;
   std::unique_ptr<Expr> index;
@@ -184,6 +203,7 @@ struct ArrayAssignStmt : public Stmt {
   void accept(Visitor* visitor) const override { visitor->visit(this); }
 };
 
+// Pointer assignment (e.g., *p = 10;)
 struct PointerAssignStmt : public Stmt {
   std::unique_ptr<Expr> ptr_expr; // The expression evaluating to the pointer (e.g., p, or *pp)
   std::unique_ptr<Expr> value;
@@ -193,6 +213,7 @@ struct PointerAssignStmt : public Stmt {
   void accept(Visitor* visitor) const override { visitor->visit(this); }
 };
 
+// Block of statements (e.g., { stmt1; stmt2; })
 struct ScopeStmt : public Stmt {
   std::vector<std::unique_ptr<Stmt>> stmts;
   ScopeStmt(std::vector<std::unique_ptr<Stmt>> s, int l, int c) : Stmt(l, c), stmts(std::move(s)) {}
@@ -200,6 +221,7 @@ struct ScopeStmt : public Stmt {
   void accept(Visitor* visitor) const override { visitor->visit(this); }
 };
 
+// If statement
 struct IfStmt : public Stmt {
   std::unique_ptr<Expr> condition;
   std::unique_ptr<Stmt> then_stmt;
@@ -212,6 +234,7 @@ struct IfStmt : public Stmt {
   void accept(Visitor* visitor) const override { visitor->visit(this); }
 };
 
+// While loop
 struct WhileStmt : public Stmt {
   std::unique_ptr<Expr> condition;
   std::unique_ptr<Stmt> body;
@@ -221,6 +244,7 @@ struct WhileStmt : public Stmt {
   void accept(Visitor* visitor) const override { visitor->visit(this); }
 };
 
+// For loop
 struct ForStmt : public Stmt {
   std::unique_ptr<Stmt> init;
   std::unique_ptr<Expr> condition;
@@ -232,11 +256,13 @@ struct ForStmt : public Stmt {
   void accept(Visitor* visitor) const override { visitor->visit(this); }
 };
 
+// Function argument definition
 struct Arg {
   std::string name;
   Type type;
 };
 
+// Function definition
 struct Function : public Node {
   std::string name;
   std::vector<Arg> args;
@@ -251,6 +277,7 @@ struct Function : public Node {
   void accept(Visitor* visitor) const override { visitor->visit(this); }
 };
 
+// Root node of the AST
 struct Program : public Node {
   std::vector<std::unique_ptr<Function>> functions;
   std::vector<std::unique_ptr<Stmt>> globals;
@@ -259,6 +286,7 @@ struct Program : public Node {
   void accept(Visitor* visitor) const override { visitor->visit(this); }
 };
 
+// Parser class responsible for converting a list of tokens into an AST.
 class Parser {
 public:
   explicit Parser(std::vector<Token> tokens);
@@ -267,14 +295,18 @@ public:
 private:
   const std::vector<Token> m_tokens;
   size_t m_index = 0;
+  
+  // Helper functions
   std::optional<Token> peek(int offset = 0) const;
   Token consume();
   void report_error(const std::string& message, std::optional<Token> token = std::nullopt) const;
 
+  // Parsing functions for different language constructs
   std::unique_ptr<Function> parse_function();
   std::unique_ptr<Stmt> parse_stmt();
   std::unique_ptr<Stmt> parse_scope();
 
+  // Expression parsing (precedence climbing)
   std::unique_ptr<Expr> parse_expr();
   std::unique_ptr<Expr> parse_logical_or();
   std::unique_ptr<Expr> parse_logical_and();
