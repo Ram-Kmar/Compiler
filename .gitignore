@@ -21,3 +21,19 @@ build.ninja
 
 # OS specific
 .DS_Store
+
+# Visual Studio
+.vs/
+
+# Windows binaries
+*.exe
+*.o
+*.obj
+*.dll
+
+# Test outputs
+frontend_test.exe
+test_bin_llvm.exe
+test_fib.exe
+ninja.exe
+out.o
