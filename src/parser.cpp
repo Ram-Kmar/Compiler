@@ -156,6 +156,10 @@ void ScopeStmt::print(int indent) const {
   }
 }
 
+void ScopeStmt::print(int indent) const {
+  print_indent(indent);
+}
+
 void IfStmt::print(int indent) const {
   print_indent(indent);
   std::cout << "IfStmt at " << line << ":" << col << ":" << std::endl;

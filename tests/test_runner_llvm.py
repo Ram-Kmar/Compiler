@@ -18,23 +18,40 @@ tests = [
     ("test_ptr.hy", 20),
 ]
 
-COMPILER_PATH = os.path.join(SCRIPT_DIR, "../build/compiler")
+# Adjust paths for Windows if necessary
+COMPILER_NAME = "compiler.exe" if os.name == 'nt' else "compiler"
+COMPILER_PATH = os.path.join(SCRIPT_DIR, "../build", COMPILER_NAME)
+
 LLVM_OUTPUT = os.path.join(SCRIPT_DIR, "out.ll")
-EXECUTABLE = os.path.join(SCRIPT_DIR, "test_bin_llvm")
+
+EXECUTABLE_NAME = "test_bin_llvm.exe" if os.name == 'nt' else "test_bin_llvm"
+EXECUTABLE = os.path.join(SCRIPT_DIR, EXECUTABLE_NAME)
 
 def run_command(command):
     result = subprocess.run(command, shell=True, capture_output=True, text=True)
     return result
 
 def main():
+    # On Windows, build path might be slightly different depending on generator (e.g. Debug/Release folders)
+    # But usually cmake puts it directly in build or build/Debug. 
+    # We will stick to the default assumption for now.
     if not os.path.exists(COMPILER_PATH):
-        print(f"Error: Compiler not found at {COMPILER_PATH}. Please build it first.")
-        sys.exit(1)
+        # Fallback check for Windows Debug/Release folders
+        if os.name == 'nt':
+             debug_path = os.path.join(SCRIPT_DIR, "../build/Debug", COMPILER_NAME)
+             if os.path.exists(debug_path):
+                 globals()['COMPILER_PATH'] = debug_path
+             else:
+                 print(f"Error: Compiler not found at {COMPILER_PATH} or {debug_path}. Please build it first.")
+                 sys.exit(1)
+        else:
+            print(f"Error: Compiler not found at {COMPILER_PATH}. Please build it first.")
+            sys.exit(1)
 
     passed = 0
     failed = 0
 
-    print(f"{'Test File':<20} | {'Status':<10} | {'Expected':<10} | {'Actual':<10}")
+    print(f"{ 'Test File':<20} | { 'Status':<10} | { 'Expected':<10} | { 'Actual':<10}")
     print("-" * 60)
 
     for filename, expected in tests:
@@ -44,7 +61,8 @@ def main():
             failed += 1
             continue
 
-        # 1. Compile .hy to .ll (and .s)
+        # 1. Compile .hy to .ll
+        # We run the command in SCRIPT_DIR so out.ll is generated there
         compile_cmd = f"{COMPILER_PATH} {filepath}"
         compile_res = subprocess.run(compile_cmd, shell=True, capture_output=True, text=True, cwd=SCRIPT_DIR)
         
@@ -60,7 +78,13 @@ def main():
              continue
 
         # 2. Compile .ll to executable using clang
-        assemble_cmd = f"clang -Wno-override-module -o {EXECUTABLE} {LLVM_OUTPUT}"
+        # Windows requires linking against legacy_stdio_definitions for printf
+        link_flags = ""
+        if os.name == 'nt':
+            link_flags = "-llegacy_stdio_definitions -lucrt"
+
+        # -Wno-override-module suppresses warnings about target triple mismatch (e.g. macos vs windows)
+        assemble_cmd = f"clang -Wno-override-module -o {EXECUTABLE} {LLVM_OUTPUT} {link_flags}"
         assemble_res = run_command(assemble_cmd)
 
         if assemble_res.returncode != 0:
