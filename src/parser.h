@@ -41,6 +41,7 @@ struct IfStmt;
 struct WhileStmt;
 struct ForStmt;
 struct Function;
+struct Layer;
 struct Program;
 
 // Visitor interface for the Visitor design pattern.
@@ -67,6 +68,7 @@ public:
   virtual void visit(const ForStmt* node) = 0;
   virtual void visit(const Function* node) = 0;
   virtual void visit(const Program* node) = 0;
+  virtual void visit(const Layer* node) = 0;
 };
 
 // Base class for all AST nodes.
@@ -277,8 +279,24 @@ struct Function : public Node {
   void accept(Visitor* visitor) const override { visitor->visit(this); }
 };
 
+struct Layer : public Node {
+  std::string name;
+  std::vector<Arg> args;
+  std::unique_ptr<ScopeStmt> body;
+  Type return_type;
+  std::vector<int> sizes;
+
+  Layer(std::string n, std::vector<Arg> a, std::unique_ptr<ScopeStmt> b,
+          Type rt, std::vector<int> s, int l, int c)
+      : Node(l, c), name(std::move(n)), args(std::move(a)), body(std::move(b)),
+      return_type(rt), sizes(std::move(s)) {}
+  void print(int indent = 0) const override;
+  void accept(Visitor* visitor) const override { visitor->visit(this); }
+};
+
 // Root node of the AST
 struct Program : public Node {
+  std::vector<std::unique_ptr<Layer>> layers;
   std::vector<std::unique_ptr<Function>> functions;
   std::vector<std::unique_ptr<Stmt>> globals;
   Program() : Node(1, 1) {}
@@ -299,9 +317,11 @@ private:
   // Helper functions
   std::optional<Token> peek(int offset = 0) const;
   Token consume();
+  void consume_terminator();
   void report_error(const std::string& message, std::optional<Token> token = std::nullopt) const;
 
   // Parsing functions for different language constructs
+  std::unique_ptr<Layer> parse_layer();
   std::unique_ptr<Function> parse_function();
   std::unique_ptr<Stmt> parse_stmt();
   std::unique_ptr<Stmt> parse_scope();

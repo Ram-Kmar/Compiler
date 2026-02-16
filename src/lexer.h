@@ -14,6 +14,8 @@ enum class TokenType {
   _else,
   _while,
   _for,
+  _layer,
+  _fn,
   int_lit,
   semi,
   ident,
@@ -36,7 +38,12 @@ enum class TokenType {
   close_paren,
   comma,
   open_bracket,
-  close_bracket
+  close_bracket,
+  indent,
+  dedent,
+  newline,
+  colon,
+  pipe
 };
 
 struct Token {

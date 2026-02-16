@@ -222,11 +222,41 @@ void Function::print(int indent) const {
   body->print(indent + 1);
 }
 
+void Layer::print(int indent) const {
+  print_indent(indent);
+  std::string ret_type_str = "void";
+  if (return_type.base == Type::Base::Int) ret_type_str = "int";
+  else if (return_type.base == Type::Base::Bool) ret_type_str = "bool";
+  for (int i=0; i<return_type.ptr_level; ++i) ret_type_str += "*";
+
+  std::cout << "Layer(" << name << ", " << ret_type_str << ") at " << line << ":" << col << ":" << std::endl;
+  if (!sizes.empty()) {
+      print_indent(indent + 1);
+      std::cout << "Sizes: [";
+      for (size_t i=0; i<sizes.size(); ++i) {
+          std::cout << sizes[i] << (i == sizes.size() - 1 ? "" : ", ");
+      }
+      std::cout << "]" << std::endl;
+  }
+  for (const auto &arg : args) {
+    print_indent(indent + 1);
+    std::string arg_type_str = "void";
+    if (arg.type.base == Type::Base::Int) arg_type_str = "int";
+    else if (arg.type.base == Type::Base::Bool) arg_type_str = "bool";
+    for (int i=0; i<arg.type.ptr_level; ++i) arg_type_str += "*";
+    std::cout << "Arg(" << arg.name << ", " << arg_type_str << ")" << std::endl;
+  }
+  body->print(indent + 1);
+}
+
 void Program::print(int indent) const {
   print_indent(indent);
   std::cout << "Program:" << std::endl;
   for (const auto &stmt : globals) {
     stmt->print(indent + 1);
+  }
+  for (const auto &layer : layers) {
+    layer->print(indent + 1);
   }
   for (const auto &func : functions) {
     func->print(indent + 1);
@@ -449,13 +479,19 @@ std::unique_ptr<Expr> Parser::parse_factor() {
   return nullptr;
 }
 
-// Parses a block of statements enclosed in {}
+// Parses a block of statements based on indentation
 std::unique_ptr<Stmt> Parser::parse_scope() {
-  if (peek().has_value() && peek().value().type == TokenType::open_curly) {
-    auto start_token = consume(); // Eat '{'
+  while (peek().has_value() && peek().value().type == TokenType::newline) consume();
+
+  if (peek().has_value() && peek().value().type == TokenType::indent) {
+    auto start_token = consume(); // Eat INDENT
     std::vector<std::unique_ptr<Stmt>> stmts;
     while (peek().has_value() &&
-           peek().value().type != TokenType::close_curly) {
+           peek().value().type != TokenType::dedent) {
+      if (peek().value().type == TokenType::newline) {
+          consume();
+          continue;
+      }
       auto stmt = parse_stmt();
       if (stmt) {
         stmts.push_back(std::move(stmt));
@@ -463,12 +499,14 @@ std::unique_ptr<Stmt> Parser::parse_scope() {
         break;
       }
     }
-    if (peek().has_value() && peek().value().type == TokenType::close_curly) {
-      consume(); // Eat '}'
+    if (peek().has_value() && peek().value().type == TokenType::dedent) {
+      consume(); // Eat DEDENT
       return std::make_unique<ScopeStmt>(std::move(stmts), start_token.line, start_token.col);
     } else {
-      report_error("Expected '}'");
+      report_error("Expected DEDENT");
     }
+  } else {
+      report_error("Expected indentation for block");
   }
   return nullptr;
 }
@@ -485,11 +523,7 @@ std::unique_ptr<Stmt> Parser::parse_stmt() {
     if (!expr) {
       report_error("Expected expression after 'return'", start_token);
     }
-    if (peek().has_value() && peek().value().type == TokenType::semi) {
-      consume();
-    } else {
-      report_error("Expected ';' after return statement");
-    }
+    consume_terminator();
     return std::make_unique<ReturnStmt>(std::move(expr), start_token.line, start_token.col);
   } else if (peek().value().type == TokenType::_int || peek().value().type == TokenType::_bool) {
     // Variable declaration: int x = 5; or int* p;
@@ -522,17 +556,11 @@ std::unique_ptr<Stmt> Parser::parse_stmt() {
         if (!init) {
           report_error("Expected expression after '='");
         }
-        if (peek().has_value() && peek().value().type == TokenType::semi) {
-          consume();
-        } else {
-          report_error("Expected ';' after variable declaration");
-        }
+        consume_terminator();
         return std::make_unique<VarDecl>(name, type, std::move(init), type_token.line, type_token.col, array_size);
-      } else if (peek().has_value() && peek().value().type == TokenType::semi) {
-        consume();
-        return std::make_unique<VarDecl>(name, type, nullptr, type_token.line, type_token.col, array_size);
       } else {
-        report_error("Expected '=' or ';' in variable declaration");
+        consume_terminator();
+        return std::make_unique<VarDecl>(name, type, nullptr, type_token.line, type_token.col, array_size);
       }
     } else {
       report_error("Expected identifier after type");
@@ -548,11 +576,7 @@ std::unique_ptr<Stmt> Parser::parse_stmt() {
       if (!expr) {
         report_error("Expected expression after '='");
       }
-      if (peek().has_value() && peek().value().type == TokenType::semi) {
-        consume();
-      } else {
-        report_error("Expected ';' after assignment");
-      }
+      consume_terminator();
       return std::make_unique<AssignStmt>(name, std::move(expr), start_token.line, start_token.col);
     } else if (peek(1).has_value() && peek(1).value().type == TokenType::open_bracket) { // Array Assignment: x[0] = 5;
       auto name_token = consume();
@@ -564,20 +588,14 @@ std::unique_ptr<Stmt> Parser::parse_stmt() {
           if (peek().has_value() && peek().value().type == TokenType::eq) {
               consume(); // Eat '='
               auto value = parse_expr();
-              if (peek().has_value() && peek().value().type == TokenType::semi) {
-                  consume();
-                  return std::make_unique<ArrayAssignStmt>(name, std::move(index), std::move(value), start_token.line, start_token.col);
-              } else { report_error("Expected ';' after array assignment"); }
+              consume_terminator();
+              return std::make_unique<ArrayAssignStmt>(name, std::move(index), std::move(value), start_token.line, start_token.col);
           } else { report_error("Expected '=' after array index"); }
       } else { report_error("Expected ']' after array index"); }
     } else if (peek(1).has_value() &&
                peek(1).value().type == TokenType::open_paren) { // Expression statement (e.g., function call): foo();
       auto expr = parse_expr();
-      if (peek().has_value() && peek().value().type == TokenType::semi) {
-        consume();
-      } else {
-        report_error("Expected ';' after expression statement");
-      }
+      consume_terminator();
       return std::make_unique<ExprStmt>(std::move(expr), start_token.line, start_token.col);
     } else {
       report_error("Unexpected identifier or missing assignment.");
@@ -596,65 +614,56 @@ std::unique_ptr<Stmt> Parser::parse_stmt() {
     if (peek().has_value() && peek().value().type == TokenType::eq) {
         consume(); // Eat '='
         auto value = parse_expr();
-        if (peek().has_value() && peek().value().type == TokenType::semi) {
-            consume();
-        } else { report_error("Expected ';' after pointer assignment"); }
+        consume_terminator();
         return std::make_unique<PointerAssignStmt>(std::move(ptr_expr), std::move(value), start_token.line, start_token.col);
     } else {
          report_error("Expected '=' after pointer dereference in statement");
     }
-  } else if (peek().value().type == TokenType::open_curly) { // Scope block
+  } else if (peek().value().type == TokenType::indent) { // Scope block
     return parse_scope();
   } else if (peek().value().type == TokenType::_if) { // If statement
     auto start_token = consume(); // Eat 'if'
-    if (peek().has_value() && peek().value().type == TokenType::open_paren) {
-      consume(); // Eat '('
-      auto condition = parse_expr();
-      if (!condition) {
-        report_error("Expected expression in if condition");
+    auto condition = parse_expr();
+    if (!condition) {
+      report_error("Expected expression in if condition");
+    }
+    if (peek().has_value() && peek().value().type == TokenType::colon) {
+      consume(); // Eat ':'
+      auto then_stmt = parse_scope();
+      if (!then_stmt) {
+        report_error("Expected indented block after if condition");
       }
-      if (peek().has_value() && peek().value().type == TokenType::close_paren) {
-        consume(); // Eat ')'
-        auto then_stmt = parse_stmt();
-        if (!then_stmt) {
-          report_error("Expected statement after if condition");
-        }
 
-        std::unique_ptr<Stmt> else_stmt = nullptr;
-        if (peek().has_value() && peek().value().type == TokenType::_else) {
-          consume(); // Eat 'else'
-          else_stmt = parse_stmt();
+      std::unique_ptr<Stmt> else_stmt = nullptr;
+      if (peek().has_value() && peek().value().type == TokenType::_else) {
+        consume(); // Eat 'else'
+        if (peek().has_value() && peek().value().type == TokenType::colon) {
+            consume(); // Eat ':'
         }
-
-        return std::make_unique<IfStmt>(
-            std::move(condition), std::move(then_stmt), std::move(else_stmt), start_token.line, start_token.col);
-      } else {
-        report_error("Expected ')' after if condition");
+        else_stmt = parse_scope();
       }
+
+      return std::make_unique<IfStmt>(
+          std::move(condition), std::move(then_stmt), std::move(else_stmt), start_token.line, start_token.col);
     } else {
-      report_error("Expected '(' after if");
+      report_error("Expected ':' after if condition");
     }
   } else if (peek().value().type == TokenType::_while) { // While loop
     auto start_token = consume(); // Eat 'while'
-    if (peek().has_value() && peek().value().type == TokenType::open_paren) {
-      consume(); // Eat '('
-      auto condition = parse_expr();
-      if (!condition) {
-        report_error("Expected expression in while condition");
+    auto condition = parse_expr();
+    if (!condition) {
+      report_error("Expected expression in while condition");
+    }
+    if (peek().has_value() && peek().value().type == TokenType::colon) {
+      consume(); // Eat ':'
+      auto body = parse_scope();
+      if (!body) {
+        report_error("Expected indented block after while condition");
       }
-      if (peek().has_value() && peek().value().type == TokenType::close_paren) {
-        consume(); // Eat ')'
-        auto body = parse_stmt();
-        if (!body) {
-          report_error("Expected statement after while condition");
-        }
-        return std::make_unique<WhileStmt>(std::move(condition),
-                                           std::move(body), start_token.line, start_token.col);
-      } else {
-        report_error("Expected ')' after while condition");
-      }
+      return std::make_unique<WhileStmt>(std::move(condition),
+                                         std::move(body), start_token.line, start_token.col);
     } else {
-      report_error("Expected '(' after while");
+      report_error("Expected ':' after while condition");
     }
   } else if (peek().value().type == TokenType::_for) { // For loop
     auto start_token = consume(); // Eat 'for'
@@ -719,10 +728,16 @@ std::unique_ptr<Stmt> Parser::parse_stmt() {
         consume(); // Eat ')'
       } else { report_error("Expected ')' after for-increment"); }
 
+      if (peek().has_value() && peek().value().type == TokenType::colon) {
+          consume(); // Eat ':'
+      } else {
+          report_error("Expected ':' after for statement");
+      }
+
       // 4. Body
-      auto body = parse_stmt();
+      auto body = parse_scope();
       if (!body) {
-        report_error("Expected statement after for loop");
+        report_error("Expected indented block after for loop");
       }
       return std::make_unique<ForStmt>(std::move(init), std::move(condition), std::move(increment), std::move(body), start_token.line, start_token.col);
     } else {
@@ -733,25 +748,142 @@ std::unique_ptr<Stmt> Parser::parse_stmt() {
   return nullptr;
 }
 
-std::unique_ptr<Function> Parser::parse_function() {
-  // Expect type
-  Type return_type;
-  auto start_token = peek().value();
-  if (peek().has_value() && peek().value().type == TokenType::_int) {
-    consume();
-    return_type = Type::Int();
-  } else if (peek().has_value() && peek().value().type == TokenType::_bool) {
-    consume();
-    return_type = Type::Bool();
-  } else {
-    report_error("Expected return type");
+std::unique_ptr<Layer> Parser::parse_layer() {
+  if (!peek().has_value() || peek().value().type != TokenType::_layer) {
+    report_error("Expected 'layer' keyword");
+  }
+  auto start_token = consume(); // Eat 'layer'
+
+  if (!peek().has_value() || peek().value().type != TokenType::ident) {
+    report_error("Expected layer name");
+  }
+  std::string name = std::get<std::string>(consume().value);
+
+  // Expect '('
+  if (!peek().has_value() || peek().value().type != TokenType::open_paren) {
+    report_error("Expected '('");
+  }
+  consume();
+
+  std::vector<Arg> args;
+  // Parse args
+  if (peek().has_value() && peek().value().type != TokenType::close_paren) {
+    while (true) {
+      Type arg_type;
+      if (peek().has_value() && peek().value().type == TokenType::_int) {
+        consume();
+        arg_type = Type::Int();
+      } else if (peek().has_value() && peek().value().type == TokenType::_bool) {
+        consume();
+        arg_type = Type::Bool();
+      } else {
+        report_error("Expected arg type");
+      }
+      
+      // Parse pointer levels for arg type
+      while (peek().has_value() && peek().value().type == TokenType::star) {
+          consume();
+          arg_type.ptr_level++;
+      }
+
+      if (!peek().has_value() || peek().value().type != TokenType::ident) {
+        report_error("Expected arg name");
+      }
+      args.push_back({std::get<std::string>(consume().value), arg_type});
+
+      if (peek().has_value() && peek().value().type == TokenType::comma) {
+        consume();
+      } else {
+        break;
+      }
+    }
   }
 
-  // Parse pointer levels for return type
-  while (peek().has_value() && peek().value().type == TokenType::star) {
-      consume();
-      return_type.ptr_level++;
+  if (!peek().has_value() || peek().value().type != TokenType::close_paren) {
+    report_error("Expected ')'");
   }
+  consume();
+
+  // Parse return type: -> type
+  Type return_type = Type::Void();
+  if (peek().has_value() && peek().value().type == TokenType::minus) {
+      consume(); // Eat '-'
+      if (peek().has_value() && peek().value().type == TokenType::gt) {
+          consume(); // Eat '>'
+      } else {
+          report_error("Expected '>' after '-' for return type arrow");
+      }
+      
+      if (peek().has_value() && peek().value().type == TokenType::_int) {
+        consume();
+        return_type = Type::Int();
+      } else if (peek().has_value() && peek().value().type == TokenType::_bool) {
+        consume();
+        return_type = Type::Bool();
+      } else {
+        report_error("Expected return type after '->'");
+      }
+
+      while (peek().has_value() && peek().value().type == TokenType::star) {
+          consume();
+          return_type.ptr_level++;
+      }
+  }
+
+  // Parse sizes: | [size1, size2]
+  std::vector<int> sizes;
+  if (peek().has_value() && peek().value().type == TokenType::pipe) {
+    consume(); // Eat '|'
+    if (peek().has_value() && peek().value().type == TokenType::open_bracket) {
+      consume(); // Eat '['
+      while (peek().has_value() && peek().value().type != TokenType::close_bracket) {
+        if (peek().value().type == TokenType::int_lit) {
+          sizes.push_back(std::get<int>(consume().value));
+        } else {
+          report_error("Expected integer literal for size");
+        }
+        if (peek().has_value() && peek().value().type == TokenType::comma) {
+          consume();
+        } else {
+          break;
+        }
+      }
+      if (peek().has_value() && peek().value().type == TokenType::close_bracket) {
+        consume(); // Eat ']'
+      } else {
+        report_error("Expected ']' after sizes");
+      }
+    } else {
+       report_error("Expected '[' after '|' for sizes");
+    }
+  }
+
+  // Expect ':'
+  if (!peek().has_value() || peek().value().type != TokenType::colon) {
+    report_error("Expected ':' after layer signature");
+  }
+  consume();
+
+  auto body_stmt = parse_scope();
+  if (!body_stmt) {
+    report_error("Failed to parse layer body");
+  }
+
+  ScopeStmt *raw_scope = dynamic_cast<ScopeStmt *>(body_stmt.get());
+  if (!raw_scope) {
+    report_error("Layer body is not a scope statement");
+  }
+  body_stmt.release();
+  std::unique_ptr<ScopeStmt> scope_ptr(raw_scope);
+
+  return std::make_unique<Layer>(name, args, std::move(scope_ptr), return_type, sizes, start_token.line, start_token.col);
+}
+
+std::unique_ptr<Function> Parser::parse_function() {
+  if (!peek().has_value() || peek().value().type != TokenType::_fn) {
+    report_error("Expected 'fn' keyword");
+  }
+  auto start_token = consume(); // Eat 'fn'
 
   // Expect Identifier (Function Name)
   if (!peek().has_value() || peek().value().type != TokenType::ident) {
@@ -804,10 +936,38 @@ std::unique_ptr<Function> Parser::parse_function() {
   }
   consume();
 
-  // Expect '{' -> parse_scope
-  if (!peek().has_value() || peek().value().type != TokenType::open_curly) {
-    report_error("Expected function body start '{'");
+  // Parse return type: -> type
+  Type return_type = Type::Void();
+  if (peek().has_value() && peek().value().type == TokenType::minus) {
+      consume(); // Eat '-'
+      if (peek().has_value() && peek().value().type == TokenType::gt) {
+          consume(); // Eat '>'
+      } else {
+          report_error("Expected '>' after '-' for return type arrow");
+      }
+      
+      if (peek().has_value() && peek().value().type == TokenType::_int) {
+        consume();
+        return_type = Type::Int();
+      } else if (peek().has_value() && peek().value().type == TokenType::_bool) {
+        consume();
+        return_type = Type::Bool();
+      } else {
+        report_error("Expected return type after '->'");
+      }
+
+      // Parse pointer levels for return type
+      while (peek().has_value() && peek().value().type == TokenType::star) {
+          consume();
+          return_type.ptr_level++;
+      }
   }
+
+  // Expect ':'
+  if (!peek().has_value() || peek().value().type != TokenType::colon) {
+    report_error("Expected ':' after function signature");
+  }
+  consume();
 
   auto body_stmt = parse_scope();
   if (!body_stmt) {
@@ -827,27 +987,33 @@ std::unique_ptr<Function> Parser::parse_function() {
 // Entry point for parsing. Parses a list of globals and functions.
 std::unique_ptr<Program> Parser::parse_program() {
   auto program = std::make_unique<Program>();
-  while (peek().has_value()) {
-    bool is_func = false;
-    // Lookahead to distinguish between global variable declaration and function definition.
-    // Both start with a type (int/bool).
-    // Function: int foo() ...
-    // Variable: int foo; or int foo = ...
-    bool is_type = peek(0).has_value() && (peek(0).value().type == TokenType::_int || peek(0).value().type == TokenType::_bool);
-    
-    //This is it is function declaration.
-    if (is_type &&
-        peek(1).has_value() && peek(1).value().type == TokenType::ident &&
-        peek(2).has_value() && peek(2).value().type == TokenType::open_paren) {
-      is_func = true;
-    }
 
-    if (is_func) {
+  while (peek().has_value()) {
+    if (peek().value().type == TokenType::newline) {
+        consume();
+        continue;
+    }
+    if (peek().value().type == TokenType::_layer) {
+      program->layers.push_back(parse_layer());
+    } else if (peek().value().type == TokenType::_fn) {
       program->functions.push_back(parse_function());
+    } else if (peek().value().type == TokenType::ident || 
+               peek().value().type == TokenType::_int || 
+               peek().value().type == TokenType::_bool ||
+               peek().value().type == TokenType::star) {
+      auto stmt = parse_stmt();
+      if (stmt) {
+          program->globals.push_back(std::move(stmt));
+      } else {
+          // Should not happen if peek was correct
+          consume(); 
+      }
     } else {
-      program->globals.push_back(parse_stmt());
+      // Skip unexpected tokens at top level or report error
+      report_error("Unexpected token at top level");
     }
   }
+
   return program;
 }
 
@@ -858,3 +1024,15 @@ std::optional<Token> Parser::peek(int offset) const {
 }
 
 Token Parser::consume() { return m_tokens[m_index++]; }
+
+void Parser::consume_terminator() {
+    bool found = false;
+    while (peek().has_value() && (peek()->type == TokenType::semi || peek()->type == TokenType::newline)) {
+        consume();
+        found = true;
+    }
+    // If we are at a DEDENT or EOF, that's also a valid termination for the last statement in a block
+    if (!found && peek().has_value() && peek()->type != TokenType::dedent) {
+        report_error("Expected ';' or newline at end of statement");
+    }
+}

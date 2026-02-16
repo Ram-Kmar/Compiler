@@ -34,6 +34,7 @@ public:
     void visit(const WhileStmt* node) override;
     void visit(const ForStmt* node) override;
     void visit(const Function* node) override;
+    void visit(const Layer* node) override;
     void visit(const Program* node) override;
 
 private:
